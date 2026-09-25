@@ -1,492 +1,593 @@
 <!doctype html>
 <html lang="de">
-
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#f7f8fa">
-    <link rel="icon" href="data:,">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f7f8fa" />
+    <link rel="icon" href="data:," />
     <title>Public Paths – Wikipedia-Kreise</title>
     <style>
-        :root {
-            color-scheme: light;
-        }
+      :root {
+        color-scheme: light;
+      }
 
-        * {
-            box-sizing: border-box;
-        }
+      * {
+        box-sizing: border-box;
+      }
 
-        html,
-        body {
-            margin: 0;
-            min-height: 100%;
-        }
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
 
-        body {
-            background: #f7f8fa;
-            font-family: Arial, Helvetica, sans-serif;
-        }
+      body {
+        background: #f7f8fa;
+        font-family: Arial, Helvetica, sans-serif;
+      }
 
-        /* Die Zeichenfläche behält exakt das Seitenverhältnis der Originalskizze. */
-        .viewport {
-            width: 100%;
-            height: 100vh;
-            height: 100dvh;
-            display: flex;
-            align-items: center;
-            overflow: auto;
-            background: #f7f8fa;
-        }
+      /* Die Zeichenfläche behält exakt das Seitenverhältnis der Originalskizze. */
+      .viewport {
+        width: 100%;
+        height: 100vh;
+        height: 100dvh;
+        display: flex;
+        align-items: center;
+        overflow: auto;
+        background: #f7f8fa;
+      }
 
-        .map {
-            position: relative;
-            flex: none;
-            width: max(960px, min(100vw, 1498px));
-            aspect-ratio: 1498 / 927;
-            margin: auto;
-            isolation: isolate;
-        }
+      .map {
+        position: relative;
+        flex: none;
+        width: max(960px, min(100vw, 1498px));
+        aspect-ratio: 1498 / 927;
+        margin: auto;
+        isolation: isolate;
+      }
 
-        #guides {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            opacity: 0;
-            pointer-events: none;
-        }
+      #guides {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        pointer-events: none;
+      }
 
-        #dots {
-            position: absolute;
-            inset: 0;
-        }
+      #dots {
+        position: absolute;
+        inset: 0;
+      }
 
-        /* Die grauen Kreise bilden die Wege; die SVG-Linien selbst sind unsichtbar. */
+      /* Die grauen Kreise bilden die Wege; die SVG-Linien selbst sind unsichtbar. */
+      .article-dot {
+        position: absolute;
+        display: block;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: rgba(220, 223, 227, var(--alpha));
+        box-shadow: 0 0 7px 2px rgba(220, 223, 227, 0.42);
+        filter: blur(1.4px);
+        transform: translate(-50%, -50%);
+        transition: opacity 0.16s ease;
+        cursor: pointer;
+      }
+
+      .article-dot.is-active {
+        opacity: 0;
+      }
+
+      .article-dot:focus-visible {
+        outline: 3px solid #59606b;
+        outline-offset: 4px;
+        filter: none;
+      }
+
+      /* Die Vorschau liegt genau über dem gewählten Kreis und wächst um dessen Mitte. */
+      .preview {
+        position: absolute;
+        width: clamp(250px, 25vw, 334px);
+        aspect-ratio: 1;
+        z-index: 5;
+        opacity: 0;
+        pointer-events: none;
+        transform: translate(-50%, -50%) scale(var(--start-scale, 0.1));
+        transform-origin: center;
+        transition:
+          transform 0.32s cubic-bezier(0.17, 0.78, 0.25, 1),
+          opacity 0.16s ease;
+      }
+
+      .preview.is-visible {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+      }
+
+      /* Die Unschärfe betrifft nur den Rand, niemals den lesbaren Artikeltext. */
+      .preview::before {
+        content: "";
+        position: absolute;
+        inset: -7px;
+        border-radius: 50%;
+        background: #d8dce1;
+        filter: blur(8px);
+        opacity: 0.9;
+      }
+
+      .preview-surface {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: inset 0 0 14px rgba(180, 183, 189, 0.24);
+      }
+
+      .wiki-page {
+        padding: 38px 34px 28px;
+        color: #202122;
+        opacity: 0;
+        transition: opacity 0.18s ease 0.08s;
+      }
+
+      .preview.is-visible .wiki-page {
+        opacity: 1;
+      }
+
+      .wiki-masthead {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 10px;
+        letter-spacing: 0.15em;
+        color: #54595d;
+        text-transform: uppercase;
+      }
+
+      .wiki-mark {
+        font-size: 27px;
+        line-height: 0.9;
+        letter-spacing: -0.12em;
+      }
+
+      .wiki-page h1 {
+        margin: 12px 0 3px;
+        font:
+          normal 24px/1.08 Georgia,
+          "Times New Roman",
+          serif;
+        overflow-wrap: anywhere;
+      }
+
+      .wiki-rule {
+        height: 1px;
+        background: #a2a9b1;
+        margin: 8px 0 10px;
+      }
+
+      .wiki-subtitle {
+        margin: 0 0 9px;
+        font-size: 10px;
+        color: #54595d;
+      }
+
+      .wiki-excerpt {
+        font:
+          12px/1.43 Arial,
+          Helvetica,
+          sans-serif;
+        margin: 0;
+        max-height: 180px;
+        overflow: hidden;
+        white-space: pre-line;
+        overflow-wrap: anywhere;
+      }
+
+      .wiki-image {
+        display: none;
+        float: right;
+        width: 81px;
+        max-height: 96px;
+        object-fit: cover;
+        margin: 1px 0 7px 9px;
+        border: 1px solid #eaecf0;
+      }
+
+      .wiki-image.has-image {
+        display: block;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .preview,
+        .wiki-page,
         .article-dot {
-            position: absolute;
-            display: block;
-            padding: 0;
-            border: 0;
-            border-radius: 50%;
-            background: rgba(220, 223, 227, var(--alpha));
-            box-shadow: 0 0 7px 2px rgba(220, 223, 227, .42);
-            filter: blur(1.4px);
-            transform: translate(-50%, -50%);
-            transition: opacity .16s ease;
-            cursor: pointer;
+          transition: none;
         }
-
-        .article-dot.is-active {
-            opacity: 0;
-        }
-
-        .article-dot:focus-visible {
-            outline: 3px solid #59606b;
-            outline-offset: 4px;
-            filter: none;
-        }
-
-        /* Die Vorschau liegt genau über dem gewählten Kreis und wächst um dessen Mitte. */
-        .preview {
-            position: absolute;
-            width: clamp(250px, 25vw, 334px);
-            aspect-ratio: 1;
-            z-index: 5;
-            opacity: 0;
-            pointer-events: none;
-            transform: translate(-50%, -50%) scale(var(--start-scale, .1));
-            transform-origin: center;
-            transition: transform .32s cubic-bezier(.17, .78, .25, 1), opacity .16s ease;
-        }
-
-        .preview.is-visible {
-            opacity: 1;
-            transform: translate(-50%, -50%) scale(1);
-        }
-
-        /* Die Unschärfe betrifft nur den Rand, niemals den lesbaren Artikeltext. */
-        .preview::before {
-            content: "";
-            position: absolute;
-            inset: -7px;
-            border-radius: 50%;
-            background: #d8dce1;
-            filter: blur(8px);
-            opacity: .9;
-        }
-
-        .preview-surface {
-            position: absolute;
-            inset: 0;
-            overflow: hidden;
-            border-radius: 50%;
-            background: #fff;
-            box-shadow: inset 0 0 14px rgba(180, 183, 189, .24);
-        }
-
-        .wiki-page {
-            padding: 38px 34px 28px;
-            color: #202122;
-            opacity: 0;
-            transition: opacity .18s ease .08s;
-        }
-
-        .preview.is-visible .wiki-page {
-            opacity: 1;
-        }
-
-        .wiki-masthead {
-            display: flex;
-            align-items: center;
-            gap: 7px;
-            font-family: Georgia, 'Times New Roman', serif;
-            font-size: 10px;
-            letter-spacing: .15em;
-            color: #54595d;
-            text-transform: uppercase;
-        }
-
-        .wiki-mark {
-            font-size: 27px;
-            line-height: .9;
-            letter-spacing: -.12em;
-        }
-
-        .wiki-page h1 {
-            margin: 12px 0 3px;
-            font: normal 24px/1.08 Georgia, 'Times New Roman', serif;
-            overflow-wrap: anywhere;
-        }
-
-        .wiki-rule {
-            height: 1px;
-            background: #a2a9b1;
-            margin: 8px 0 10px;
-        }
-
-        .wiki-subtitle {
-            margin: 0 0 9px;
-            font-size: 10px;
-            color: #54595d;
-        }
-
-        .wiki-excerpt {
-            font: 12px/1.43 Arial, Helvetica, sans-serif;
-            margin: 0;
-            max-height: 180px;
-            overflow: hidden;
-            white-space: pre-line;
-            overflow-wrap: anywhere;
-        }
-
-        .wiki-image {
-            display: none;
-            float: right;
-            width: 81px;
-            max-height: 96px;
-            object-fit: cover;
-            margin: 1px 0 7px 9px;
-            border: 1px solid #eaecf0;
-        }
-
-        .wiki-image.has-image {
-            display: block;
-        }
-
-        .sr-only {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            padding: 0;
-            margin: -1px;
-            overflow: hidden;
-            clip: rect(0, 0, 0, 0);
-            white-space: nowrap;
-            border: 0;
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-
-            .preview,
-            .wiki-page,
-            .article-dot {
-                transition: none;
-            }
-        }
+      }
     </style>
-</head>
+  </head>
 
-<body>
-    <p class="sr-only">Graue Kreise markieren Wikipedia-Artikel auf den öffentlichen Wegen. Mit der Maus darüberfahren
-        oder per Tab auswählen. Ein Klick öffnet den Artikel. Auf Touchscreens erst antippen, dann erneut tippen.</p>
+  <body>
+    <p class="sr-only">
+      Graue Kreise markieren Wikipedia-Artikel auf den öffentlichen Wegen. Mit
+      der Maus darüberfahren oder per Tab auswählen. Ein Klick öffnet den
+      Artikel. Auf Touchscreens erst antippen, dann erneut tippen.
+    </p>
     <div class="viewport" id="viewport">
-        <main class="map" id="map" aria-label="Wikipedia auf öffentlichen Wegen">
-            <!-- Originale Pfadgeometrie. Keine Striche und keine schwarze Füllfläche anzeigen. -->
-            <svg id="guides" viewBox="0 0 1498 927" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-                <path
-                    d="M38.6177 699.39C38.6698 699.39 38.7219 699.39 57.3023 699.337C75.8827 699.284 112.99 699.178 150.976 695.578C188.962 691.978 226.702 684.887 253.322 678.353C279.942 671.818 294.298 666.055 313.246 655.446C332.195 644.837 355.301 629.557 384.603 607.124C413.905 584.692 448.703 555.569 473.643 537.235C498.584 518.901 512.613 512.237 542.483 503.123C572.353 494.009 617.639 482.646 647.415 473.332C690.989 459.701 705.265 448.433 709.935 444.302C722.395 433.28 727.72 422.701 734.017 404.423C740.806 384.721 735.133 362.739 725.211 344.616C722.881 340.359 720.303 338.392 713.329 333.76C706.355 329.127 694.625 322.159 640.731 305.415C586.836 288.672 491.131 262.364 435.34 245.835C379.548 229.305 366.57 223.351 340.745 209.647C314.92 195.943 276.642 174.669 244.615 158.854C212.587 143.04 187.969 133.329 169.4 126.994C150.83 120.66 139.054 117.995 115.477 116.256C91.8996 114.517 56.8775 113.783 37.9377 113.494C18.9978 113.205 17.2016 113.384 13 113.999" />
-                <path
-                    d="M573.773 285.273C573.661 285.273 568.315 282.476 551.415 278.396C519.628 270.723 497.116 256.285 488.443 250.219C479.677 244.088 467.01 228.16 452.585 209.384C445.429 200.069 443.182 193.758 441.218 187.173C439.606 181.767 439.869 155.123 439.591 117.572C439.415 93.7776 422.432 69.7026 406.673 50.9882C404.013 48.2326 402.778 47.0919 401.397 46.2347C400.015 45.3774 398.523 44.8382 394.891 42.5938" />
-                <path
-                    d="M720.656 337.422C727.726 337.422 746.311 336.576 758.628 330.79C774.63 323.274 777.889 313.409 781.657 300.469C783.698 293.463 784.187 280.777 785.019 263.694C785.852 246.611 786.046 225.303 784.724 205.999C783.402 186.694 780.557 170.039 774.002 138.425C767.446 106.81 757.266 60.7395 746.547 13" />
-                <path
-                    d="M551.5 38.0149C551.5 37.8907 552.364 39.258 567.032 52.7623C580.524 65.1835 607.556 87.5064 633.576 106.665C659.595 125.824 684.107 140.783 702.281 150.61C720.455 160.437 731.549 164.679 749.154 169.147C766.759 173.614 790.539 178.179 808.085 180.555C825.63 182.93 836.221 182.978 849.796 180.841C863.371 178.704 879.609 174.38 907.895 164.898C936.181 155.416 976.022 140.908 1008.6 131.209C1041.18 121.51 1065.3 117.06 1089.38 114.355C1113.47 111.651 1136.8 110.827 1149.92 110.491C1163.03 110.156 1165.23 110.335 1178.68 114.148C1192.12 117.962 1216.75 125.405 1233.5 129.69C1258.1 135.985 1275.52 135.71 1292.54 134.458C1308.16 131.076 1318.18 127.587 1322.95 125.126C1325.3 123.864 1327.54 122.575 1330.71 120.967" />
-                <path
-                    d="M784.773 273.273C784.773 275.426 788.217 290.635 800.254 313.939C806.263 325.574 817.113 329.683 825.489 332.616C828.905 333.812 839.367 333.325 862.221 329.59C876.766 327.213 896.22 318.725 915.648 309.931C935.077 301.137 953.617 290.983 993.829 274.337C1034.04 257.69 1095.37 234.859 1132.9 219.985C1170.43 205.111 1182.3 198.886 1198.96 187.09C1215.61 175.295 1236.68 158.116 1249.43 146.835C1266.77 131.511 1276.92 112.102 1290.39 84.0119C1302.63 54.4643 1309.51 37.1291 1311.28 33.5107C1312.1 31.7367 1312.75 30.0888 1313.74 26.5625" />
-                <path
-                    d="M860.657 331.688C855.224 337.932 842.554 354.509 839.502 371.431C837.536 382.335 839.907 390.76 842.834 396.442C847.041 404.61 856.005 412.737 866.942 422.434C873.145 427.934 881.801 433.266 942.915 455.582C1004.03 477.898 1117.63 516.693 1189.49 543.315C1261.35 569.937 1288.03 583.21 1317.73 601.941C1347.44 620.671 1379.35 644.457 1396.83 657.659C1416.54 672.549 1429.96 689.188 1448.16 712.557C1457.06 723.988 1461.66 738.06 1468.92 769.768C1472.85 790.722 1477.3 821.553 1480.06 847.395C1482.82 873.238 1483.76 893.159 1484.73 913.683" />
-                <path
-                    d="M902.773 440.445C902.659 440.445 900.463 440.406 882.799 440.429C865.135 440.452 829.924 440.498 798.183 442.423C766.443 444.347 739.239 448.148 723.023 450.739C702.307 454.05 686.812 457.759 674.273 463.758C655.211 472.878 641.26 487.495 619.505 508.706C608.725 519.217 600.608 531.297 573.703 580.086C546.797 628.874 501.893 714.537 477.119 761.082C452.346 807.627 449.062 812.458 432.975 829.842C416.887 847.226 388.096 877.016 355.734 909.926" />
-            </svg>
-            <div id="dots"></div>
-            <div class="preview" id="preview" aria-hidden="true">
-                <div class="preview-surface">
-                    <article class="wiki-page">
-                        <div class="wiki-masthead"><span class="wiki-mark">W</span><span>Wikipedia</span></div>
-                        <h1 id="wiki-title"></h1>
-                        <div class="wiki-rule"></div>
-                        <p class="wiki-subtitle">Aus Wikipedia, der freien Enzyklopädie</p>
-                        <img class="wiki-image" id="wiki-image" alt="">
-                        <p class="wiki-excerpt" id="wiki-excerpt"></p>
-                    </article>
-                </div>
-            </div>
-        </main>
+      <main class="map" id="map" aria-label="Wikipedia auf öffentlichen Wegen">
+        <!-- Originale Pfadgeometrie. Keine Striche und keine schwarze Füllfläche anzeigen. -->
+        <svg
+          id="guides"
+          viewBox="0 0 1498 927"
+          aria-hidden="true"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M38.6177 699.39C38.6698 699.39 38.7219 699.39 57.3023 699.337C75.8827 699.284 112.99 699.178 150.976 695.578C188.962 691.978 226.702 684.887 253.322 678.353C279.942 671.818 294.298 666.055 313.246 655.446C332.195 644.837 355.301 629.557 384.603 607.124C413.905 584.692 448.703 555.569 473.643 537.235C498.584 518.901 512.613 512.237 542.483 503.123C572.353 494.009 617.639 482.646 647.415 473.332C690.989 459.701 705.265 448.433 709.935 444.302C722.395 433.28 727.72 422.701 734.017 404.423C740.806 384.721 735.133 362.739 725.211 344.616C722.881 340.359 720.303 338.392 713.329 333.76C706.355 329.127 694.625 322.159 640.731 305.415C586.836 288.672 491.131 262.364 435.34 245.835C379.548 229.305 366.57 223.351 340.745 209.647C314.92 195.943 276.642 174.669 244.615 158.854C212.587 143.04 187.969 133.329 169.4 126.994C150.83 120.66 139.054 117.995 115.477 116.256C91.8996 114.517 56.8775 113.783 37.9377 113.494C18.9978 113.205 17.2016 113.384 13 113.999"
+          />
+          <path
+            d="M573.773 285.273C573.661 285.273 568.315 282.476 551.415 278.396C519.628 270.723 497.116 256.285 488.443 250.219C479.677 244.088 467.01 228.16 452.585 209.384C445.429 200.069 443.182 193.758 441.218 187.173C439.606 181.767 439.869 155.123 439.591 117.572C439.415 93.7776 422.432 69.7026 406.673 50.9882C404.013 48.2326 402.778 47.0919 401.397 46.2347C400.015 45.3774 398.523 44.8382 394.891 42.5938"
+          />
+          <path
+            d="M720.656 337.422C727.726 337.422 746.311 336.576 758.628 330.79C774.63 323.274 777.889 313.409 781.657 300.469C783.698 293.463 784.187 280.777 785.019 263.694C785.852 246.611 786.046 225.303 784.724 205.999C783.402 186.694 780.557 170.039 774.002 138.425C767.446 106.81 757.266 60.7395 746.547 13"
+          />
+          <path
+            d="M551.5 38.0149C551.5 37.8907 552.364 39.258 567.032 52.7623C580.524 65.1835 607.556 87.5064 633.576 106.665C659.595 125.824 684.107 140.783 702.281 150.61C720.455 160.437 731.549 164.679 749.154 169.147C766.759 173.614 790.539 178.179 808.085 180.555C825.63 182.93 836.221 182.978 849.796 180.841C863.371 178.704 879.609 174.38 907.895 164.898C936.181 155.416 976.022 140.908 1008.6 131.209C1041.18 121.51 1065.3 117.06 1089.38 114.355C1113.47 111.651 1136.8 110.827 1149.92 110.491C1163.03 110.156 1165.23 110.335 1178.68 114.148C1192.12 117.962 1216.75 125.405 1233.5 129.69C1258.1 135.985 1275.52 135.71 1292.54 134.458C1308.16 131.076 1318.18 127.587 1322.95 125.126C1325.3 123.864 1327.54 122.575 1330.71 120.967"
+          />
+          <path
+            d="M784.773 273.273C784.773 275.426 788.217 290.635 800.254 313.939C806.263 325.574 817.113 329.683 825.489 332.616C828.905 333.812 839.367 333.325 862.221 329.59C876.766 327.213 896.22 318.725 915.648 309.931C935.077 301.137 953.617 290.983 993.829 274.337C1034.04 257.69 1095.37 234.859 1132.9 219.985C1170.43 205.111 1182.3 198.886 1198.96 187.09C1215.61 175.295 1236.68 158.116 1249.43 146.835C1266.77 131.511 1276.92 112.102 1290.39 84.0119C1302.63 54.4643 1309.51 37.1291 1311.28 33.5107C1312.1 31.7367 1312.75 30.0888 1313.74 26.5625"
+          />
+          <path
+            d="M860.657 331.688C855.224 337.932 842.554 354.509 839.502 371.431C837.536 382.335 839.907 390.76 842.834 396.442C847.041 404.61 856.005 412.737 866.942 422.434C873.145 427.934 881.801 433.266 942.915 455.582C1004.03 477.898 1117.63 516.693 1189.49 543.315C1261.35 569.937 1288.03 583.21 1317.73 601.941C1347.44 620.671 1379.35 644.457 1396.83 657.659C1416.54 672.549 1429.96 689.188 1448.16 712.557C1457.06 723.988 1461.66 738.06 1468.92 769.768C1472.85 790.722 1477.3 821.553 1480.06 847.395C1482.82 873.238 1483.76 893.159 1484.73 913.683"
+          />
+          <path
+            d="M902.773 440.445C902.659 440.445 900.463 440.406 882.799 440.429C865.135 440.452 829.924 440.498 798.183 442.423C766.443 444.347 739.239 448.148 723.023 450.739C702.307 454.05 686.812 457.759 674.273 463.758C655.211 472.878 641.26 487.495 619.505 508.706C608.725 519.217 600.608 531.297 573.703 580.086C546.797 628.874 501.893 714.537 477.119 761.082C452.346 807.627 449.062 812.458 432.975 829.842C416.887 847.226 388.096 877.016 355.734 909.926"
+          />
+        </svg>
+        <div id="dots"></div>
+        <div class="preview" id="preview" aria-hidden="true">
+          <div class="preview-surface">
+            <article class="wiki-page">
+              <div class="wiki-masthead">
+                <span class="wiki-mark">W</span><span>Wikipedia</span>
+              </div>
+              <h1 id="wiki-title"></h1>
+              <div class="wiki-rule"></div>
+              <p class="wiki-subtitle">
+                Aus Wikipedia, der freien Enzyklopädie
+              </p>
+              <img class="wiki-image" id="wiki-image" alt="" />
+              <p class="wiki-excerpt" id="wiki-excerpt"></p>
+            </article>
+          </div>
+        </div>
+      </main>
     </div>
     <script>
-        (() => {
-            'use strict';
+      (() => {
+        "use strict";
 
-            const WIDTH = 1498;
-            const HEIGHT = 927;
-            const DOT_SPACING = 28;       // Kleiner = dichterer Weg aus Kreisen
-            const RANDOM_BATCHES = 4;     // Vier unabhängige Zufallsauswahlen
-            const ARTICLES_PER_BATCH = 75;
-            const API = 'https://de.wikipedia.org/w/api.php';
+        const WIDTH = 1498;
+        const HEIGHT = 927;
+        const DOT_SPACING = 28; // Kleiner = dichterer Weg aus Kreisen
+        const RANDOM_BATCHES = 4; // Vier unabhängige Zufallsauswahlen
+        const ARTICLES_PER_BATCH = 75;
+        const API = "https://de.wikipedia.org/w/api.php";
 
-            const map = document.getElementById('map');
-            const viewport = document.getElementById('viewport');
-            const dotsLayer = document.getElementById('dots');
-            const preview = document.getElementById('preview');
-            const title = document.getElementById('wiki-title');
-            const excerpt = document.getElementById('wiki-excerpt');
-            const image = document.getElementById('wiki-image');
-            const paths = [...document.querySelectorAll('#guides path')];
-            const dots = [];
-            const summaryCache = new Map();
-            const fallbackTitles = [
-                'Wikipedia', 'Wissensallmende', 'Internet', 'Öffentlicher Raum',
-                'Gemeingut', 'Hypertext', 'Open Access', 'Freie Software',
-                'Bibliothek', 'Kartografie', 'Digitales Gemeingut', 'Netzwerk',
-                'Offene Daten', 'Wissenschaft', 'Sprache', 'Kommunikation'
-            ];
-            let activeDot = null;
-            let touchDot = null;
-            let touchTime = 0;
-            let requestSerial = 0;
+        const map = document.getElementById("map");
+        const viewport = document.getElementById("viewport");
+        const dotsLayer = document.getElementById("dots");
+        const preview = document.getElementById("preview");
+        const title = document.getElementById("wiki-title");
+        const excerpt = document.getElementById("wiki-excerpt");
+        const image = document.getElementById("wiki-image");
+        const paths = [...document.querySelectorAll("#guides path")];
+        const dots = [];
+        const summaryCache = new Map();
+        const fallbackTitles = [
+          "Wikipedia",
+          "Wissensallmende",
+          "Internet",
+          "Öffentlicher Raum",
+          "Gemeingut",
+          "Hypertext",
+          "Open Access",
+          "Freie Software",
+          "Bibliothek",
+          "Kartografie",
+          "Digitales Gemeingut",
+          "Netzwerk",
+          "Offene Daten",
+          "Wissenschaft",
+          "Sprache",
+          "Kommunikation",
+        ];
+        let activeDot = null;
+        let touchDot = null;
+        let touchTime = 0;
+        let requestSerial = 0;
 
-            // Feste visuelle Streuung: Der Weg bleibt stabil, die Artikel ändern sich bei jedem Laden.
-            function seededRandom(seed) {
-                return () => {
-                    seed |= 0;
-                    seed = (seed + 0x6D2B79F5) | 0;
-                    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-                    t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
-                    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-                };
+        // Feste visuelle Streuung: Der Weg bleibt stabil, die Artikel ändern sich bei jedem Laden.
+        function seededRandom(seed) {
+          return () => {
+            seed |= 0;
+            seed = (seed + 0x6d2b79f5) | 0;
+            let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+            t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+          };
+        }
+        const rand = seededRandom(124903);
+
+        function articleURL(article) {
+          return article.id
+            ? `https://de.wikipedia.org/?curid=${article.id}`
+            : `https://de.wikipedia.org/wiki/${encodeURIComponent(article.title.replaceAll(" ", "_"))}`;
+        }
+
+        function createDots() {
+          const fragment = document.createDocumentFragment();
+
+          paths.forEach((path) => {
+            const total = path.getTotalLength();
+            for (let distance = 8; distance < total - 5; ) {
+              const at = Math.min(
+                total,
+                Math.max(0, distance + (rand() - 0.5) * 10),
+              );
+              const point = path.getPointAtLength(at);
+              const before = path.getPointAtLength(Math.max(0, at - 5));
+              const after = path.getPointAtLength(Math.min(total, at + 5));
+              const dx = after.x - before.x;
+              const dy = after.y - before.y;
+              const magnitude = Math.hypot(dx, dy) || 1;
+              const side = (rand() - 0.5) * 25;
+              const x = point.x - (dy / magnitude) * side;
+              const y = point.y + (dx / magnitude) * side;
+              const diameter = (rand() < 0.12 ? 38 : 18) + rand() * 23;
+              const article = {
+                title: fallbackTitles[dots.length % fallbackTitles.length],
+              };
+              const dot = document.createElement("a");
+              dot.className = "article-dot";
+              dot.style.left = `${(x / WIDTH) * 100}%`;
+              dot.style.top = `${(y / HEIGHT) * 100}%`;
+              dot.style.width = `${(diameter / WIDTH) * 100}%`;
+              dot.style.height = `${(diameter / HEIGHT) * 100}%`;
+              dot.style.setProperty(
+                "--alpha",
+                (0.65 + rand() * 0.25).toFixed(2),
+              );
+              dot.dataset.diameter = diameter;
+              dot.article = article;
+              dot.href = articleURL(article);
+              dot.target = "_blank";
+              dot.rel = "noopener noreferrer";
+              dot.setAttribute("aria-label", `Wikipedia: ${article.title}`);
+              dots.push(dot);
+              fragment.appendChild(dot);
+              distance += DOT_SPACING * (0.78 + rand() * 0.47);
             }
-            const rand = seededRandom(124903);
+          });
+          dotsLayer.appendChild(fragment);
+        }
 
-            function articleURL(article) {
-                return article.id
-                    ? `https://de.wikipedia.org/?curid=${article.id}`
-                    : `https://de.wikipedia.org/wiki/${encodeURIComponent(article.title.replaceAll(' ', '_'))}`;
+        async function fetchJSON(params) {
+          const url = new URL(API);
+          url.search = new URLSearchParams({
+            action: "query",
+            format: "json",
+            formatversion: "2",
+            origin: "*",
+            ...params,
+          });
+          const response = await fetch(url);
+          if (!response.ok)
+            throw new Error(`Wikipedia API: ${response.status}`);
+          return response.json();
+        }
+
+        async function loadRandomArticles() {
+          const calls = Array.from({ length: RANDOM_BATCHES }, () =>
+            fetchJSON({
+              list: "random",
+              rnnamespace: "0",
+              rnfilterredir: "nonredirects",
+              rnminsize: "500",
+              rnlimit: String(ARTICLES_PER_BATCH),
+            }),
+          );
+          const results = await Promise.allSettled(calls);
+          const unique = new Map();
+          for (const result of results) {
+            if (result.status !== "fulfilled") continue;
+            for (const page of result.value.query?.random ?? []) {
+              const id = Number(page.id ?? page.pageid);
+              if (id && page.title) unique.set(id, { id, title: page.title });
             }
+          }
+          if (!unique.size) {
+            console.warn(
+              "Wikipedia ist gerade nicht erreichbar; die Beispielartikel bleiben aktiv.",
+            );
+            return;
+          }
+          const articles = [...unique.values()];
+          for (let i = articles.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [articles[i], articles[j]] = [articles[j], articles[i]];
+          }
+          dots.forEach((dot, index) => {
+            dot.article = articles[index % articles.length];
+            dot.href = articleURL(dot.article);
+            dot.setAttribute("aria-label", `Wikipedia: ${dot.article.title}`);
+          });
+          if (activeDot) showArticle(activeDot);
+        }
 
-            function createDots() {
-                const fragment = document.createDocumentFragment();
+        async function loadSummary(article) {
+          const key = article.id ?? article.title;
+          if (!summaryCache.has(key)) {
+            const params = {
+              prop: "extracts|pageimages",
+              exintro: "1",
+              explaintext: "1",
+              exchars: "950",
+              piprop: "thumbnail",
+              pithumbsize: "300",
+              ...(article.id
+                ? { pageids: String(article.id) }
+                : { titles: article.title }),
+            };
+            summaryCache.set(
+              key,
+              fetchJSON(params).then((data) => data.query?.pages?.[0] ?? null),
+            );
+          }
+          return summaryCache.get(key);
+        }
 
-                paths.forEach(path => {
-                    const total = path.getTotalLength();
-                    for (let distance = 8; distance < total - 5;) {
-                        const at = Math.min(total, Math.max(0, distance + (rand() - .5) * 10));
-                        const point = path.getPointAtLength(at);
-                        const before = path.getPointAtLength(Math.max(0, at - 5));
-                        const after = path.getPointAtLength(Math.min(total, at + 5));
-                        const dx = after.x - before.x;
-                        const dy = after.y - before.y;
-                        const magnitude = Math.hypot(dx, dy) || 1;
-                        const side = (rand() - .5) * 25;
-                        const x = point.x - dy / magnitude * side;
-                        const y = point.y + dx / magnitude * side;
-                        const diameter = (rand() < .12 ? 38 : 18) + rand() * 23;
-                        const article = { title: fallbackTitles[dots.length % fallbackTitles.length] };
-                        const dot = document.createElement('a');
-                        dot.className = 'article-dot';
-                        dot.style.left = `${x / WIDTH * 100}%`;
-                        dot.style.top = `${y / HEIGHT * 100}%`;
-                        dot.style.width = `${diameter / WIDTH * 100}%`;
-                        dot.style.height = `${diameter / HEIGHT * 100}%`;
-                        dot.style.setProperty('--alpha', (0.65 + rand() * .25).toFixed(2));
-                        dot.dataset.diameter = diameter;
-                        dot.article = article;
-                        dot.href = articleURL(article);
-                        dot.target = '_blank';
-                        dot.rel = 'noopener noreferrer';
-                        dot.setAttribute('aria-label', `Wikipedia: ${article.title}`);
-                        dots.push(dot);
-                        fragment.appendChild(dot);
-                        distance += DOT_SPACING * (.78 + rand() * .47);
-                    }
-                });
-                dotsLayer.appendChild(fragment);
+        async function showArticle(dot) {
+          const serial = ++requestSerial;
+          const article = dot.article;
+          title.textContent = article.title;
+          excerpt.textContent = "Artikelausschnitt wird geladen …";
+          image.classList.remove("has-image");
+          image.removeAttribute("src");
+          try {
+            const page = await loadSummary(article);
+            if (serial !== requestSerial || activeDot !== dot) return;
+            title.textContent = page?.title || article.title;
+            excerpt.textContent =
+              page?.extract?.trim() ||
+              "Für diesen Artikel ist keine Kurzvorschau vorhanden. Klicke auf den Kreis, um ihn auf Wikipedia zu lesen.";
+            if (page?.thumbnail?.source?.startsWith("https://")) {
+              image.src = page.thumbnail.source;
+              image.classList.add("has-image");
             }
+          } catch (error) {
+            if (serial !== requestSerial || activeDot !== dot) return;
+            excerpt.textContent =
+              "Die Vorschau konnte nicht geladen werden. Klicke auf den Kreis, um den Artikel auf Wikipedia zu öffnen.";
+            console.warn(
+              "Wikipedia-Vorschau konnte nicht geladen werden:",
+              error,
+            );
+          }
+        }
 
-            async function fetchJSON(params) {
-                const url = new URL(API);
-                url.search = new URLSearchParams({ action: 'query', format: 'json', formatversion: '2', origin: '*', ...params });
-                const response = await fetch(url);
-                if (!response.ok) throw new Error(`Wikipedia API: ${response.status}`);
-                return response.json();
+        function activate(dot) {
+          if (activeDot === dot) return;
+          activeDot?.classList.remove("is-active");
+          activeDot = dot;
+          dot.classList.add("is-active");
+          preview.classList.remove("is-visible");
+          preview.style.left = dot.style.left;
+          preview.style.top = dot.style.top;
+          const visibleDiameter =
+            (Number(dot.dataset.diameter) * map.clientWidth) / WIDTH;
+          preview.style.setProperty(
+            "--start-scale",
+            Math.max(0.07, visibleDiameter / preview.clientWidth).toFixed(3),
+          );
+          // Ein Reflow lässt auch beim Wechsel zwischen zwei Kreisen die Expansion neu starten.
+          void preview.offsetWidth;
+          preview.classList.add("is-visible");
+          showArticle(dot);
+        }
+
+        function deactivate() {
+          if (!activeDot) return;
+          ++requestSerial;
+          activeDot.classList.remove("is-active");
+          activeDot = null;
+          preview.classList.remove("is-visible");
+        }
+
+        // Lets the AprilTag page use the same popup interaction as a real cursor.
+        window.setExternalPosition = function (x, y) {
+          let nearest = null;
+          let nearestDistance = Infinity;
+
+          dots.forEach((dot) => {
+            const dotX = (Number.parseFloat(dot.style.left) / 100) * WIDTH;
+            const dotY = (Number.parseFloat(dot.style.top) / 100) * HEIGHT;
+            const distance = Math.hypot(dotX - x, dotY - y);
+            if (distance < nearestDistance) {
+              nearest = dot;
+              nearestDistance = distance;
             }
+          });
 
-            async function loadRandomArticles() {
-                const calls = Array.from({ length: RANDOM_BATCHES }, () => fetchJSON({
-                    list: 'random', rnnamespace: '0', rnfilterredir: 'nonredirects',
-                    rnminsize: '500', rnlimit: String(ARTICLES_PER_BATCH)
-                }));
-                const results = await Promise.allSettled(calls);
-                const unique = new Map();
-                for (const result of results) {
-                    if (result.status !== 'fulfilled') continue;
-                    for (const page of result.value.query?.random ?? []) {
-                        const id = Number(page.id ?? page.pageid);
-                        if (id && page.title) unique.set(id, { id, title: page.title });
-                    }
-                }
-                if (!unique.size) {
-                    console.warn('Wikipedia ist gerade nicht erreichbar; die Beispielartikel bleiben aktiv.');
-                    return;
-                }
-                const articles = [...unique.values()];
-                for (let i = articles.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [articles[i], articles[j]] = [articles[j], articles[i]];
-                }
-                dots.forEach((dot, index) => {
-                    dot.article = articles[index % articles.length];
-                    dot.href = articleURL(dot.article);
-                    dot.setAttribute('aria-label', `Wikipedia: ${dot.article.title}`);
-                });
-                if (activeDot) showArticle(activeDot);
+          if (nearest && nearestDistance <= 42) activate(nearest);
+          else deactivate();
+        };
+
+        function hoveredDot(target) {
+          return target instanceof Element
+            ? target.closest(".article-dot")
+            : null;
+        }
+
+        map.addEventListener("pointermove", (event) => {
+          if (event.pointerType === "touch") return;
+          const dot = hoveredDot(event.target);
+          if (dot) activate(dot);
+          else deactivate(); // Private Property: keine Vorschau
+        });
+        map.addEventListener("pointerleave", (event) => {
+          if (event.pointerType !== "touch") deactivate();
+        });
+        dotsLayer.addEventListener("focusin", (event) => {
+          const dot = hoveredDot(event.target);
+          if (dot) activate(dot);
+        });
+        dotsLayer.addEventListener("focusout", (event) => {
+          if (!dotsLayer.contains(event.relatedTarget)) deactivate();
+        });
+        map.addEventListener("click", (event) => {
+          const dot = hoveredDot(event.target);
+          if (!dot) {
+            deactivate();
+            return;
+          }
+          // Auf Touchscreens erst ansehen, beim zweiten Tippen Wikipedia öffnen.
+          if (window.matchMedia("(hover: none)").matches) {
+            const now = Date.now();
+            if (touchDot !== dot || now - touchTime > 3500) {
+              event.preventDefault();
+              touchDot = dot;
+              touchTime = now;
+              activate(dot);
             }
+          }
+        });
+        window.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") deactivate();
+        });
 
-            async function loadSummary(article) {
-                const key = article.id ?? article.title;
-                if (!summaryCache.has(key)) {
-                    const params = {
-                        prop: 'extracts|pageimages', exintro: '1', explaintext: '1',
-                        exchars: '950', piprop: 'thumbnail', pithumbsize: '300',
-                        ...(article.id ? { pageids: String(article.id) } : { titles: article.title })
-                    };
-                    summaryCache.set(key, fetchJSON(params).then(data => data.query?.pages?.[0] ?? null));
-                }
-                return summaryCache.get(key);
-            }
-
-            async function showArticle(dot) {
-                const serial = ++requestSerial;
-                const article = dot.article;
-                title.textContent = article.title;
-                excerpt.textContent = 'Artikelausschnitt wird geladen …';
-                image.classList.remove('has-image');
-                image.removeAttribute('src');
-                try {
-                    const page = await loadSummary(article);
-                    if (serial !== requestSerial || activeDot !== dot) return;
-                    title.textContent = page?.title || article.title;
-                    excerpt.textContent = page?.extract?.trim()
-                        || 'Für diesen Artikel ist keine Kurzvorschau vorhanden. Klicke auf den Kreis, um ihn auf Wikipedia zu lesen.';
-                    if (page?.thumbnail?.source?.startsWith('https://')) {
-                        image.src = page.thumbnail.source;
-                        image.classList.add('has-image');
-                    }
-                } catch (error) {
-                    if (serial !== requestSerial || activeDot !== dot) return;
-                    excerpt.textContent = 'Die Vorschau konnte nicht geladen werden. Klicke auf den Kreis, um den Artikel auf Wikipedia zu öffnen.';
-                    console.warn('Wikipedia-Vorschau konnte nicht geladen werden:', error);
-                }
-            }
-
-            function activate(dot) {
-                if (activeDot === dot) return;
-                activeDot?.classList.remove('is-active');
-                activeDot = dot;
-                dot.classList.add('is-active');
-                preview.classList.remove('is-visible');
-                preview.style.left = dot.style.left;
-                preview.style.top = dot.style.top;
-                const visibleDiameter = Number(dot.dataset.diameter) * map.clientWidth / WIDTH;
-                preview.style.setProperty('--start-scale', Math.max(.07, visibleDiameter / preview.clientWidth).toFixed(3));
-                // Ein Reflow lässt auch beim Wechsel zwischen zwei Kreisen die Expansion neu starten.
-                void preview.offsetWidth;
-                preview.classList.add('is-visible');
-                showArticle(dot);
-            }
-
-            function deactivate() {
-                if (!activeDot) return;
-                ++requestSerial;
-                activeDot.classList.remove('is-active');
-                activeDot = null;
-                preview.classList.remove('is-visible');
-            }
-
-            function hoveredDot(target) {
-                return target instanceof Element ? target.closest('.article-dot') : null;
-            }
-
-            map.addEventListener('pointermove', event => {
-                if (event.pointerType === 'touch') return;
-                const dot = hoveredDot(event.target);
-                if (dot) activate(dot);
-                else deactivate(); // Private Property: keine Vorschau
-            });
-            map.addEventListener('pointerleave', event => {
-                if (event.pointerType !== 'touch') deactivate();
-            });
-            dotsLayer.addEventListener('focusin', event => {
-                const dot = hoveredDot(event.target);
-                if (dot) activate(dot);
-            });
-            dotsLayer.addEventListener('focusout', event => {
-                if (!dotsLayer.contains(event.relatedTarget)) deactivate();
-            });
-            map.addEventListener('click', event => {
-                const dot = hoveredDot(event.target);
-                if (!dot) { deactivate(); return; }
-                // Auf Touchscreens erst ansehen, beim zweiten Tippen Wikipedia öffnen.
-                if (window.matchMedia('(hover: none)').matches) {
-                    const now = Date.now();
-                    if (touchDot !== dot || now - touchTime > 3500) {
-                        event.preventDefault();
-                        touchDot = dot;
-                        touchTime = now;
-                        activate(dot);
-                    }
-                }
-            });
-            window.addEventListener('keydown', event => {
-                if (event.key === 'Escape') deactivate();
-            });
-
-            createDots();
-            if (viewport.scrollWidth > viewport.clientWidth) {
-                viewport.scrollLeft = (viewport.scrollWidth - viewport.clientWidth) / 2;
-            }
-            loadRandomArticles();
-        })();
+        createDots();
+        if (viewport.scrollWidth > viewport.clientWidth) {
+          viewport.scrollLeft =
+            (viewport.scrollWidth - viewport.clientWidth) / 2;
+        }
+        loadRandomArticles();
+      })();
     </script>
-</body>
-
+  </body>
 </html>

@@ -38,7 +38,7 @@ body {
 
 #tracking-layer {
   z-index: 2;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 #tracking-layer canvas {

@@ -2,8 +2,10 @@ const TAG_IDS = new Set([0, 1, 2, 3]);
 const mapWidth = 1498;
 const mapHeight = 927;
 const circleRadius = 16;
-const movementScale = 2;
+const movementScale = 1.25;
 const movementDeadzone = 1.5;
+const movementSmoothing = 0.18;
+const maximumMovement = 10;
 
 let circleX = mapWidth / 2;
 let circleY = mapHeight / 2;
@@ -11,7 +13,9 @@ let detectedTags = {};
 let previousTagCenters = {};
 let apriltag = null;
 let detecting = false;
-let hasTrackedMovement = false;
+let smoothedMovementX = 0;
+let smoothedMovementY = 0;
+let trackingStarted = false;
 
 let video;
 let cameraCanvas;
@@ -21,9 +25,37 @@ let selectedCameraId = "";
 let cameraWidth = 640;
 let cameraHeight = 480;
 
+function connectTerritoryMouse() {
+  const iframe = document.querySelector(".territory-illustration");
+  const territoryWindow = iframe?.contentWindow;
+  const territoryDocument = territoryWindow?.document;
+  const territoryMap = territoryDocument?.getElementById("map");
+
+  if (!territoryMap) return;
+  if (territoryMap.dataset.mouseBridgeConnected) return;
+  territoryMap.dataset.mouseBridgeConnected = "true";
+
+  territoryMap.addEventListener("pointermove", (event) => {
+    if (trackingStarted || event.pointerType === "touch") return;
+
+    const bounds = territoryMap.getBoundingClientRect();
+    circleX = constrain(((event.clientX - bounds.left) / bounds.width) * mapWidth, circleRadius, mapWidth - circleRadius);
+    circleY = constrain(((event.clientY - bounds.top) / bounds.height) * mapHeight, circleRadius, mapHeight - circleRadius);
+  });
+}
+
+function updateTerritoryPopup() {
+  const iframe = document.querySelector(".territory-illustration");
+  iframe?.contentWindow?.setExternalPosition?.(circleX, circleY);
+}
+
 async function setup() {
   const trackingCanvas = createCanvas(mapWidth, mapHeight);
   trackingCanvas.parent(document.getElementById("tracking-layer"));
+
+  const territoryIframe = document.querySelector(".territory-illustration");
+  territoryIframe.addEventListener("load", connectTerritoryMouse);
+  if (territoryIframe.contentDocument?.readyState === "complete") connectTerritoryMouse();
 
   video = document.getElementById("video");
   cameraSelect = document.getElementById("camera-select");
@@ -31,13 +63,6 @@ async function setup() {
   cameraSelect.addEventListener("change", async () => {
     selectedCameraId = cameraSelect.value;
     await startCamera();
-  });
-
-  document.getElementById("territory-stage").addEventListener("pointermove", (event) => {
-    if (hasTrackedMovement) return;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    circleX = constrain(((event.clientX - bounds.left) / bounds.width) * mapWidth, circleRadius, mapWidth - circleRadius);
-    circleY = constrain(((event.clientY - bounds.top) / bounds.height) * mapHeight, circleRadius, mapHeight - circleRadius);
   });
 
   if (!video) {
@@ -185,12 +210,19 @@ function calculateCameraMovement() {
 
   const tagMovementX = movements.reduce((sum, movement) => sum + movement.x, 0) / movements.length;
   const tagMovementY = movements.reduce((sum, movement) => sum + movement.y, 0) / movements.length;
-  const movementX = Math.abs(tagMovementX) > movementDeadzone ? tagMovementX : 0;
-  const movementY = Math.abs(tagMovementY) > movementDeadzone ? tagMovementY : 0;
+  const targetMovementX = Math.abs(tagMovementX) > movementDeadzone ? tagMovementX : 0;
+  const targetMovementY = Math.abs(tagMovementY) > movementDeadzone ? tagMovementY : 0;
+
+  smoothedMovementX += (targetMovementX - smoothedMovementX) * movementSmoothing;
+  smoothedMovementY += (targetMovementY - smoothedMovementY) * movementSmoothing;
+
+  const movementX = constrain(smoothedMovementX, -maximumMovement, maximumMovement);
+  const movementY = constrain(smoothedMovementY, -maximumMovement, maximumMovement);
 
   circleX = constrain(circleX - movementX * movementScale, circleRadius, mapWidth - circleRadius);
   circleY = constrain(circleY - movementY * movementScale, circleRadius, mapHeight - circleRadius);
-  hasTrackedMovement = true;
+  trackingStarted = true;
+  updateTerritoryPopup();
 }
 
 function draw() {
