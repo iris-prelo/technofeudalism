@@ -1,132 +1,47 @@
-
 // ============================================================
-// APRILTAG FLOOR CAMERA TRACKING
+// APRILTAG CAMERA MOVEMENT TRACKING
 // ============================================================
 //
-// Four AprilTags are placed on the four corners of a square:
+// Four AprilTags are placed at the four corners of a floor
+// square:
+//
 //
 //       ID 0 ---------------- ID 1
 //        |                      |
 //        |                      |
-//        |       CAMERA         |
+//        |          CAMERA      |
 //        |                      |
 //       ID 3 ---------------- ID 2
 //
-// The webcam is held in the user's hands and points toward
+//
+// The camera is held in the user's hands and points toward
 // the floor.
 //
-// The camera position is calculated from the AprilTag poses.
-// That position controls the p5 circle.
+// We detect all four tags and use their movement in the
+// camera image to determine how the camera itself moved.
+//
+// No AprilTag pose estimation is used.
+// No camera calibration is used.
+// No tag-size information is needed.
+//
+// Existing AprilTag folder/API stays unchanged.
 //
 // ============================================================
 
 
 
 // ============================================================
-// APRILTAG SETTINGS
+// APRILTAG IDS
 // ============================================================
-
-// The four IDs used for the physical floor square.
 
 const TAG_TOP_LEFT = 0;
+
 const TAG_TOP_RIGHT = 1;
+
 const TAG_BOTTOM_RIGHT = 2;
+
 const TAG_BOTTOM_LEFT = 3;
 
-
-// ------------------------------------------------------------
-// IMPORTANT:
-//
-// Measure the actual AprilTag size.
-//
-// Example:
-// if the black/white tag area is 10 cm wide:
-//
-//     TAG_SIZE = 0.10
-//
-// The AprilTag library expects meters.
-// ------------------------------------------------------------
-
-const TAG_SIZE = 0.18;
-
-
-// ============================================================
-// CAMERA SETTINGS
-// ============================================================
-
-let cameraWidth = 640;
-let cameraHeight = 480;
-
-
-// ------------------------------------------------------------
-// Camera calibration
-//
-// These are approximate values.
-//
-// cx / cy = optical center.
-//
-// fx / fy = focal length in pixels.
-//
-// If tracking works but feels geometrically inaccurate,
-// these are the values we should calibrate later.
-// ------------------------------------------------------------
-
-const FX = 600;
-const FY = 600;
-
-const CX = cameraWidth / 2;
-const CY = cameraHeight / 2;
-
-
-// ============================================================
-// PHYSICAL FLOOR SQUARE
-// ============================================================
-//
-// Define the actual positions of your four tags.
-//
-// The unit is METERS.
-//
-// Example:
-// a 2 m × 2 m square:
-//
-//        0,0 ---------------- 2,0
-//         |                    |
-//         |                    |
-//         |                    |
-//        0,2 ---------------- 2,2
-//
-// Change FLOOR_WIDTH and FLOOR_HEIGHT to your actual square.
-// ============================================================
-
-const FLOOR_WIDTH = 1.0;
-const FLOOR_HEIGHT = 1.0;
-
-
-// Physical positions of the tags.
-
-const floorTags = {
-
-  0: {
-    x: 0,
-    y: 0
-  },
-
-  1: {
-    x: FLOOR_WIDTH,
-    y: 0
-  },
-
-  2: {
-    x: FLOOR_WIDTH,
-    y: FLOOR_HEIGHT
-  },
-
-  3: {
-    x: 0,
-    y: FLOOR_HEIGHT
-  }
-
-};
 
 
 // ============================================================
@@ -136,13 +51,9 @@ const floorTags = {
 const canvasSize = 650;
 
 
+
 // ============================================================
-// PATH
-// ============================================================
-//
-// This is your original path.
-// The tracked camera position is mapped into this canvas.
-//
+// YOUR PATH
 // ============================================================
 
 let path = [
@@ -164,33 +75,27 @@ let path = [
 ];
 
 
+
 // ============================================================
-// CIRCLE SETTINGS
+// CIRCLE
 // ============================================================
 
 let circleRadius = 12;
 
-let lineThickness = 60;
-
-
-// ============================================================
-// CURRENT PATH SEGMENT
-// ============================================================
-//
-// This prevents the circle from jumping between unrelated
-// parts of the path.
-// ============================================================
-
-let currentSegment = 0;
-
-
-// ============================================================
-// CIRCLE POSITION
-// ============================================================
-
 let circleX = canvasSize / 2;
 
 let circleY = canvasSize / 2;
+
+
+
+// ============================================================
+// PATH
+// ============================================================
+
+let lineThickness = 60;
+
+let currentSegment = 0;
+
 
 
 // ============================================================
@@ -206,6 +111,7 @@ let candidateFrames = 0;
 let colorConfirmationFrames = 2;
 
 
+
 // ============================================================
 // APRILTAG
 // ============================================================
@@ -215,16 +121,24 @@ let apriltag = null;
 let detecting = false;
 
 
+
 // ============================================================
 // DETECTED TAGS
 // ============================================================
 //
-// This object stores the most recent detection for each
-// of our four tags.
+// Stores the most recent detection of each relevant tag.
+//
+// Example:
+//
+// detectedTags[0]
+// detectedTags[1]
+// detectedTags[2]
+// detectedTags[3]
 //
 // ============================================================
 
 let detectedTags = {};
+
 
 
 // ============================================================
@@ -235,34 +149,54 @@ let video;
 
 let cameraCanvas;
 
+let cameraStream;
 
-// ============================================================
-// CAMERA POSITION
-// ============================================================
-//
-// This is the camera position in physical floor coordinates.
-//
-// x = left/right
-// y = forward/back
-//
-// ============================================================
+let cameraSelect;
 
-let cameraFloorX = FLOOR_WIDTH / 2;
+let selectedCameraId = "";
 
-let cameraFloorY = FLOOR_HEIGHT / 2;
+let cameraWidth = 640;
+
+let cameraHeight = 480;
+
 
 
 // ============================================================
-// CAMERA POSITION HOLD
+// TAG MOVEMENT
 // ============================================================
 //
-// Keeps the last valid position for a short moment if a tag
-// disappears for a frame.
+// We calculate the average position of the four tags.
+//
+// Then we compare that average with the previous frame.
+//
+// If the camera moves RIGHT:
+//
+//     tags appear to move LEFT
+//
+// Therefore we move the circle RIGHT.
+//
 // ============================================================
 
-let lastPositionSeenAt = 0;
+let previousTagCenters = {};
 
-let positionHoldDuration = 250;
+
+
+// ============================================================
+// MOVEMENT SETTINGS
+// ============================================================
+
+// Increase this if the circle moves too slowly.
+//
+// Decrease this if the circle moves too quickly.
+
+const movementScale = 2.0;
+
+
+
+// Ignore tiny movements caused by AprilTag detection noise.
+
+const movementDeadzone = 1.5;
+
 
 
 // ============================================================
@@ -278,7 +212,7 @@ async function setup() {
 
 
   // ----------------------------------------------------------
-  // Get video element
+  // Get webcam video element from HTML
   // ----------------------------------------------------------
 
   video =
@@ -286,56 +220,28 @@ async function setup() {
       "video"
     );
 
-
-  // ----------------------------------------------------------
-  // Start webcam
-  // ----------------------------------------------------------
-
-  try {
-
-    const stream =
-      await navigator.mediaDevices.getUserMedia({
-
-        video: {
-
-          width: {
-            ideal: cameraWidth
-          },
-
-          height: {
-            ideal: cameraHeight
-          },
-
-          facingMode: "environment"
-
-        },
-
-        audio: false
-
-      });
-
-
-    video.srcObject =
-      stream;
-
-
-    await video.play();
-
-
-    setStatus(
-      "Camera ready — loading AprilTag..."
+  cameraSelect =
+    document.getElementById(
+      "camera-select"
     );
 
-  }
+  cameraSelect.addEventListener(
+    "change",
+    async () => {
+      selectedCameraId = cameraSelect.value;
+      await startCamera();
+    }
+  );
 
-  catch (error) {
+
+  if (!video) {
 
     console.error(
-      error
+      "Could not find #video"
     );
 
     setStatus(
-      "Could not access camera"
+      "Video element not found"
     );
 
     return;
@@ -344,7 +250,21 @@ async function setup() {
 
 
   // ----------------------------------------------------------
-  // Hidden canvas used for AprilTag detection
+  // Start camera
+  // ----------------------------------------------------------
+
+  await startCamera();
+
+
+  if (!cameraStream) {
+
+    return;
+
+  }
+
+
+  // ----------------------------------------------------------
+  // Hidden canvas used to process webcam frames
   // ----------------------------------------------------------
 
   cameraCanvas =
@@ -371,7 +291,203 @@ async function setup() {
 
 
 // ============================================================
+// START CAMERA
+// ============================================================
+
+async function startCamera() {
+
+  // ----------------------------------------------------------
+  // Stop an existing stream first
+  // ----------------------------------------------------------
+
+  if (cameraStream) {
+
+    cameraStream
+      .getTracks()
+      .forEach(
+        (track) => track.stop()
+      );
+
+  }
+
+
+  const videoConstraints = {
+
+    width: {
+      ideal: cameraWidth
+    },
+
+    height: {
+      ideal: cameraHeight
+    }
+
+  };
+
+  if (selectedCameraId) {
+    videoConstraints.deviceId = {
+      exact: selectedCameraId
+    };
+  }
+  else {
+    videoConstraints.facingMode = "environment";
+  }
+
+  try {
+
+    cameraStream =
+      await navigator.mediaDevices
+        .getUserMedia({
+
+          video: videoConstraints,
+
+          audio: false
+
+        });
+
+
+    // --------------------------------------------------------
+    // Connect camera to video element
+    // --------------------------------------------------------
+
+    video.srcObject =
+      cameraStream;
+
+
+    await video.play();
+
+    await updateCameraList();
+
+
+    // --------------------------------------------------------
+    // Get actual camera dimensions
+    // --------------------------------------------------------
+
+    if (
+      video.videoWidth > 0 &&
+      video.videoHeight > 0
+    ) {
+
+      cameraWidth =
+        video.videoWidth;
+
+      cameraHeight =
+        video.videoHeight;
+
+
+      cameraCanvas =
+        document.createElement(
+          "canvas"
+        );
+
+
+      cameraCanvas.width =
+        cameraWidth;
+
+      cameraCanvas.height =
+        cameraHeight;
+
+    }
+
+
+    setStatus(
+      "Camera ready — loading AprilTag..."
+    );
+
+
+    console.log(
+      "Camera resolution:",
+      cameraWidth,
+      "x",
+      cameraHeight
+    );
+
+  }
+
+
+  catch (error) {
+
+    console.error(
+      "Camera error:",
+      error
+    );
+
+
+    setStatus(
+      "Could not access camera"
+    );
+
+  }
+
+}
+
+
+// Populate the selector after permission reveals camera labels.
+
+async function updateCameraList() {
+
+  const devices =
+    await navigator.mediaDevices.enumerateDevices();
+
+  const cameras =
+    devices.filter(
+      (device) => device.kind === "videoinput"
+    );
+
+  cameraSelect.replaceChildren();
+
+  cameras.forEach(
+    (camera, index) => {
+
+      const option =
+        document.createElement("option");
+
+      option.value = camera.deviceId;
+
+      option.textContent =
+        camera.label || `Camera ${index + 1}`;
+
+      cameraSelect.appendChild(option);
+
+    }
+  );
+
+  const activeTrack =
+    cameraStream && cameraStream.getVideoTracks()[0];
+
+  const activeDeviceId =
+    activeTrack && activeTrack.getSettings().deviceId;
+
+  selectedCameraId = activeDeviceId || selectedCameraId;
+
+  if (selectedCameraId) {
+    cameraSelect.value = selectedCameraId;
+  }
+
+  cameraSelect.disabled = cameras.length < 2;
+
+}
+
+
+
+// ============================================================
 // APRILTAG INITIALIZATION
+// ============================================================
+//
+// IMPORTANT:
+//
+// We deliberately DO NOT call:
+//
+//     set_return_pose()
+//     set_return_solutions()
+//     set_tag_size()
+//     set_camera_info()
+//
+// We only create the detector.
+//
+// This avoids the detector-option error:
+//
+//     this._set_detector_options is not a function
+//
 // ============================================================
 
 async function startAprilTag() {
@@ -418,6 +534,16 @@ async function startAprilTag() {
               "AprilTag WASM ready!"
             );
 
+
+            setStatus(
+              "AprilTag ready — show all 4 tags"
+            );
+
+
+            requestAnimationFrame(
+              detectFrame
+            );
+
           }
 
         )
@@ -425,84 +551,8 @@ async function startAprilTag() {
       );
 
 
-    // --------------------------------------------------------
-    // IMPORTANT:
-    //
-    // We now NEED pose estimation.
-    //
-    // Previously this was 0.
-    // --------------------------------------------------------
-
-    await apriltag.set_return_pose(
-      1
-    );
-
-
-    // We don't need the alternative pose solution.
-
-    await apriltag.set_return_solutions(
-      0
-    );
-
-
-    // Detect all tags.
-
-    await apriltag.set_max_detections(
-      20
-    );
-
-
-    // --------------------------------------------------------
-    // Tell AprilTag the physical size of our tags.
-    // --------------------------------------------------------
-
-    await apriltag.set_tag_size(
-      TAG_TOP_LEFT,
-      TAG_SIZE
-    );
-
-    await apriltag.set_tag_size(
-      TAG_TOP_RIGHT,
-      TAG_SIZE
-    );
-
-    await apriltag.set_tag_size(
-      TAG_BOTTOM_RIGHT,
-      TAG_SIZE
-    );
-
-    await apriltag.set_tag_size(
-      TAG_BOTTOM_LEFT,
-      TAG_SIZE
-    );
-
-
-    // --------------------------------------------------------
-    // Give AprilTag approximate camera parameters.
-    //
-    // These are important for pose estimation.
-    // --------------------------------------------------------
-
-    await apriltag.set_camera_info(
-
-      FX,
-      FY,
-      CX,
-      CY
-
-    );
-
-
-    setStatus(
-      "AprilTag ready — show all 4 tags"
-    );
-
-
-    requestAnimationFrame(
-      detectFrame
-    );
-
   }
+
 
   catch (error) {
 
@@ -510,6 +560,7 @@ async function startAprilTag() {
       "AprilTag initialization error:",
       error
     );
+
 
     setStatus(
       "AprilTag failed — check console"
@@ -522,10 +573,14 @@ async function startAprilTag() {
 
 
 // ============================================================
-// DETECT CAMERA FRAME
+// DETECT FRAME
 // ============================================================
 
 async function detectFrame() {
+
+  // ----------------------------------------------------------
+  // Make sure AprilTag and camera are ready
+  // ----------------------------------------------------------
 
   if (
 
@@ -547,7 +602,7 @@ async function detectFrame() {
 
 
   // ----------------------------------------------------------
-  // Don't run multiple detections simultaneously.
+  // Prevent overlapping detections
   // ----------------------------------------------------------
 
   if (detecting) {
@@ -565,20 +620,21 @@ async function detectFrame() {
 
 
   // ----------------------------------------------------------
-  // Draw current camera frame to hidden canvas
+  // Get canvas context
   // ----------------------------------------------------------
 
-  let ctx =
+  const ctx =
     cameraCanvas.getContext(
-
       "2d",
-
       {
         willReadFrequently: true
       }
-
     );
 
+
+  // ----------------------------------------------------------
+  // Draw current webcam frame into hidden canvas
+  // ----------------------------------------------------------
 
   ctx.drawImage(
 
@@ -599,6 +655,7 @@ async function detectFrame() {
 
   let imageData;
 
+
   try {
 
     imageData =
@@ -614,13 +671,17 @@ async function detectFrame() {
 
   }
 
+
   catch (error) {
 
     console.error(
+      "Could not read camera pixels:",
       error
     );
 
+
     detecting = false;
+
 
     requestAnimationFrame(
       detectFrame
@@ -631,15 +692,16 @@ async function detectFrame() {
   }
 
 
-  // ----------------------------------------------------------
-  // Convert RGB → grayscale
-  // ----------------------------------------------------------
 
-  let pixels =
+  // ==========================================================
+  // CONVERT RGB → GRAYSCALE
+  // ==========================================================
+
+  const pixels =
     imageData.data;
 
 
-  let grayscalePixels =
+  const grayscalePixels =
     new Uint8Array(
 
       cameraWidth *
@@ -679,13 +741,14 @@ async function detectFrame() {
   }
 
 
+
   // ==========================================================
   // APRILTAG DETECTION
   // ==========================================================
 
   try {
 
-    let detections =
+    const detections =
       await apriltag.detect(
 
         grayscalePixels,
@@ -698,29 +761,33 @@ async function detectFrame() {
 
 
     // --------------------------------------------------------
-    // Clear the current tag list.
+    // Clear previous tag detections
     // --------------------------------------------------------
 
     detectedTags = {};
 
 
     // --------------------------------------------------------
-    // Store our four tags.
+    // Find our four tags
     // --------------------------------------------------------
 
     for (
-      let detection of detections
+      const detection of detections
     ) {
 
       if (
 
-        detection.id === TAG_TOP_LEFT ||
+        detection.id ===
+        TAG_TOP_LEFT ||
 
-        detection.id === TAG_TOP_RIGHT ||
+        detection.id ===
+        TAG_TOP_RIGHT ||
 
-        detection.id === TAG_BOTTOM_RIGHT ||
+        detection.id ===
+        TAG_BOTTOM_RIGHT ||
 
-        detection.id === TAG_BOTTOM_LEFT
+        detection.id ===
+        TAG_BOTTOM_LEFT
 
       ) {
 
@@ -734,82 +801,55 @@ async function detectFrame() {
 
 
     // --------------------------------------------------------
-    // Check how many of our four tags are visible.
+    // Count visible tags
     // --------------------------------------------------------
 
-    let numberOfTags =
+    const numberOfTags =
       Object.keys(
         detectedTags
       ).length;
 
 
-    // --------------------------------------------------------
-    // We need all four tags for reliable localization.
-    // --------------------------------------------------------
+    // Use every tag visible in consecutive frames. This keeps
+    // movement working even when one tag temporarily leaves view.
 
-    if (
-      numberOfTags === 4
-    ) {
+    if (numberOfTags > 0) {
 
-      calculateCameraPosition();
-
-
-      lastPositionSeenAt =
-        performance.now();
+      calculateCameraMovement();
 
 
       setStatus(
-        "Tracking camera — 4 AprilTags detected"
+        "Tracking — " +
+        numberOfTags +
+        " AprilTags detected"
       );
 
     }
 
+
+    // ========================================================
+    // NOT ALL TAGS FOUND
+    // ========================================================
+
     else {
 
-      // ------------------------------------------------------
-      // Temporarily keep the previous position.
-      // ------------------------------------------------------
+      setStatus(
 
-      if (
+        "Show all 4 AprilTags — " +
+        numberOfTags +
+        "/4 detected"
 
-        lastPositionSeenAt > 0 &&
-
-        performance.now() -
-        lastPositionSeenAt <
-        positionHoldDuration
-
-      ) {
-
-        setStatus(
-
-          "Tracking — " +
-          numberOfTags +
-          "/4 tags visible"
-
-        );
-
-      }
-
-      else {
-
-        setStatus(
-
-          "Show all 4 AprilTags — " +
-          numberOfTags +
-          "/4 detected"
-
-        );
-
-      }
+      );
 
     }
 
   }
 
+
   catch (error) {
 
     console.error(
-      "Detection error:",
+      "AprilTag detection error:",
       error
     );
 
@@ -818,6 +858,10 @@ async function detectFrame() {
 
   detecting = false;
 
+
+  // ----------------------------------------------------------
+  // Continue detecting
+  // ----------------------------------------------------------
 
   requestAnimationFrame(
     detectFrame
@@ -828,240 +872,132 @@ async function detectFrame() {
 
 
 // ============================================================
-// CALCULATE CAMERA POSITION
+// CALCULATE CAMERA MOVEMENT
 // ============================================================
 //
-// Each AprilTag gives us its 3D pose.
+// This is the main movement calculation.
 //
-// The pose tells us where the tag is relative to the camera.
+// We don't need to know:
 //
-// We reverse that transformation to calculate where the
-// camera is relative to the tag.
+// - camera focal length
+// - camera height
+// - physical tag size
+// - camera pose
 //
-// Because we know where each tag physically sits on the floor,
-// we can then convert that into floor coordinates.
+// We simply observe how the four tags move inside the camera
+// image.
+//
 // ============================================================
 
-function calculateCameraPosition() {
+function calculateCameraMovement() {
 
-  let positions = [];
+  const currentTagIds = Object.keys(detectedTags);
+  const movements = currentTagIds
+    .filter((id) => previousTagCenters[id])
+    .map((id) => ({
+      x: detectedTags[id].center.x - previousTagCenters[id].x,
+      y: detectedTags[id].center.y - previousTagCenters[id].y
+    }));
 
+  previousTagCenters = {};
 
-  // ----------------------------------------------------------
-  // Process all four tags.
-  // ----------------------------------------------------------
+  currentTagIds.forEach((id) => {
+    previousTagCenters[id] = {
+      x: detectedTags[id].center.x,
+      y: detectedTags[id].center.y
+    };
+  });
 
-  for (
-    let id of [
-      TAG_TOP_LEFT,
-      TAG_TOP_RIGHT,
-      TAG_BOTTOM_RIGHT,
-      TAG_BOTTOM_LEFT
-    ]
-  ) {
-
-    let detection =
-      detectedTags[id];
-
-
-    if (
-      !detection ||
-      !detection.pose
-    ) {
-
-      continue;
-
-    }
-
-
-    let pose =
-      detection.pose;
-
-
-    let R =
-      pose.R;
-
-
-    let t =
-      pose.t;
-
-
-    // --------------------------------------------------------
-    // Camera position in the tag coordinate system:
-    //
-    // cameraPosition = -R^T * t
-    // --------------------------------------------------------
-
-    let cameraX =
-      -(
-        R[0][0] * t[0] +
-        R[1][0] * t[1] +
-        R[2][0] * t[2]
-      );
-
-
-    let cameraY =
-      -(
-        R[0][1] * t[0] +
-        R[1][1] * t[1] +
-        R[2][1] * t[2]
-      );
-
-
-    // --------------------------------------------------------
-    // Add the physical position of this tag.
-    //
-    // This converts from "relative to tag" to
-    // "relative to the whole floor square".
-    // --------------------------------------------------------
-
-    let floorTag =
-      floorTags[id];
-
-
-    let worldX =
-      floorTag.x +
-      cameraX;
-
-
-    let worldY =
-      floorTag.y +
-      cameraY;
-
-
-    positions.push({
-
-      x: worldX,
-
-      y: worldY
-
-    });
-
+  if (movements.length === 0) {
+    return;
   }
 
+  const tagMovementX =
+    movements.reduce((sum, movement) => sum + movement.x, 0) /
+    movements.length;
 
-  // ----------------------------------------------------------
-  // We need at least one valid pose.
-  // ----------------------------------------------------------
+  const tagMovementY =
+    movements.reduce((sum, movement) => sum + movement.y, 0) /
+    movements.length;
+
+
+
+  // ==========================================================
+  // REMOVE SMALL DETECTION NOISE
+  // ==========================================================
+
+  let movementX = 0;
+
+  let movementY = 0;
+
 
   if (
-    positions.length === 0
+    Math.abs(tagMovementX) >
+    movementDeadzone
   ) {
 
-    return;
+    movementX =
+      tagMovementX;
 
   }
 
 
-  // ----------------------------------------------------------
-  // Average all four estimates.
-  //
-  // This makes the position less noisy.
-  // ----------------------------------------------------------
-
-  let averageX = 0;
-
-  let averageY = 0;
-
-
-  for (
-    let position of positions
+  if (
+    Math.abs(tagMovementY) >
+    movementDeadzone
   ) {
 
-    averageX +=
-      position.x;
-
-    averageY +=
-      position.y;
+    movementY =
+      tagMovementY;
 
   }
 
 
-  averageX /=
-    positions.length;
 
-  averageY /=
-    positions.length;
-
-
-  // ----------------------------------------------------------
-  // Store camera position.
-  // ----------------------------------------------------------
-
-  cameraFloorX =
-    averageX;
-
-  cameraFloorY =
-    averageY;
-
-
-  // ----------------------------------------------------------
-  // Map physical floor position to p5 canvas.
-  // ----------------------------------------------------------
-
-  updateCirclePosition();
-
-}
-
-
-
-// ============================================================
-// UPDATE CIRCLE POSITION
-// ============================================================
-
-function updateCirclePosition() {
-
-  // ----------------------------------------------------------
-  // Convert floor coordinates → p5 coordinates.
+  // ==========================================================
+  // REVERSE TAG MOVEMENT
+  // ==========================================================
   //
-  // Floor:
+  // Example:
   //
-  //     0 ---------------- FLOOR_WIDTH
+  // Camera moves RIGHT
+  //        ↓
+  // Tags appear to move LEFT
+  //        ↓
+  // movementX is negative
+  //        ↓
+  // circleX -= negative
+  //        ↓
+  // circle moves RIGHT
   //
-  // Canvas:
-  //
-  //     0 ---------------- 650
-  // ----------------------------------------------------------
+  // ==========================================================
 
-  circleX =
-    map(
+  circleX -=
 
-      cameraFloorX,
-
-      0,
-      FLOOR_WIDTH,
-
-      0,
-      width
-
-    );
+    movementX *
+    movementScale;
 
 
-  circleY =
-    map(
+  circleY -=
 
-      cameraFloorY,
-
-      0,
-      FLOOR_HEIGHT,
-
-      0,
-      height
-
-    );
+    movementY *
+    movementScale;
 
 
-  // ----------------------------------------------------------
-  // Keep circle inside the canvas.
-  // ----------------------------------------------------------
+
+  // ==========================================================
+  // KEEP CIRCLE INSIDE CANVAS
+  // ==========================================================
 
   circleX =
     constrain(
 
       circleX,
 
-      0,
-      width
+      circleRadius,
+
+      width -
+      circleRadius
 
     );
 
@@ -1071,42 +1007,68 @@ function updateCirclePosition() {
 
       circleY,
 
-      0,
-      height
+      circleRadius,
+
+      height -
+      circleRadius
 
     );
 
 
-  // ----------------------------------------------------------
-  // Check whether the camera position is on the grey path.
-  // ----------------------------------------------------------
+
+  // ==========================================================
+  // UPDATE PATH STATE
+  // ==========================================================
 
   updatePathState();
+
+
+
+  // ==========================================================
+  // DEBUG
+  // ==========================================================
+
+  console.log(
+
+    "Tag movement:",
+
+    movementX.toFixed(2),
+
+    movementY.toFixed(2),
+
+    "| Circle:",
+
+    circleX.toFixed(1),
+
+    circleY.toFixed(1)
+
+  );
 
 }
 
 
 
 // ============================================================
-// UPDATE RED / BLUE STATE
+// UPDATE PATH STATE
 // ============================================================
 
 function updatePathState() {
 
-  let position =
+  const position =
     createVector(
 
       circleX,
+
       circleY
 
     );
 
 
   // ----------------------------------------------------------
-  // Find closest allowed segment.
+  // Find nearest allowed connected segment
   // ----------------------------------------------------------
 
-  let segment =
+  const segment =
     findAllowedSegment(
       position
     );
@@ -1123,10 +1085,10 @@ function updatePathState() {
 
 
   // ----------------------------------------------------------
-  // Get current segment.
+  // Current path segment
   // ----------------------------------------------------------
 
-  let a =
+  const a =
     createVector(
 
       path[currentSegment].x,
@@ -1136,7 +1098,7 @@ function updatePathState() {
     );
 
 
-  let b =
+  const b =
     createVector(
 
       path[currentSegment + 1].x,
@@ -1147,10 +1109,10 @@ function updatePathState() {
 
 
   // ----------------------------------------------------------
-  // Find closest point on path.
+  // Closest point on path
   // ----------------------------------------------------------
 
-  let closest =
+  const closest =
     closestPointOnLine(
 
       position,
@@ -1163,10 +1125,10 @@ function updatePathState() {
 
 
   // ----------------------------------------------------------
-  // Distance from path.
+  // Distance from circle to path
   // ----------------------------------------------------------
 
-  let distance =
+  const distance =
     p5.Vector.dist(
 
       position,
@@ -1177,20 +1139,23 @@ function updatePathState() {
 
 
   // ----------------------------------------------------------
-  // Maximum distance from the centre of the path.
+  // Maximum allowed distance
   // ----------------------------------------------------------
 
-  let maxDistance =
-    lineThickness / 2
-    - circleRadius;
+  const maxDistance =
+
+    lineThickness / 2 -
+    circleRadius;
 
 
-  let isInsidePath =
-    distance <= maxDistance;
+  const isInsidePath =
+
+    distance <=
+    maxDistance;
 
 
   // ----------------------------------------------------------
-  // Stabilise colour.
+  // Colour confirmation
   // ----------------------------------------------------------
 
   if (
@@ -1214,6 +1179,10 @@ function updatePathState() {
 
   }
 
+
+  // ----------------------------------------------------------
+  // Actually change colour
+  // ----------------------------------------------------------
 
   if (
 
@@ -1269,7 +1238,7 @@ function draw() {
 
 
   for (
-    let p of path
+    const p of path
   ) {
 
     vertex(
@@ -1281,6 +1250,7 @@ function draw() {
 
 
   endShape();
+
 
 
   // ==========================================================
@@ -1296,6 +1266,7 @@ function draw() {
     circleIsInsidePath
 
   );
+
 
 
   // ==========================================================
@@ -1316,22 +1287,15 @@ function draw() {
   text(
 
     "AprilTags: " +
-    Object.keys(detectedTags).length +
+
+    Object.keys(
+      detectedTags
+    ).length +
+
     "/4",
 
     15,
-    height - 65
 
-  );
-
-
-  text(
-
-    "Camera X: " +
-    cameraFloorX.toFixed(2) +
-    " m",
-
-    15,
     height - 45
 
   );
@@ -1339,11 +1303,16 @@ function draw() {
 
   text(
 
-    "Camera Y: " +
-    cameraFloorY.toFixed(2) +
-    " m",
+    "Circle: " +
+
+    Math.round(circleX) +
+
+    ", " +
+
+    Math.round(circleY),
 
     15,
+
     height - 25
 
   );
@@ -1359,7 +1328,7 @@ function draw() {
 function drawCircle(
   x,
   y,
-  isInsidePath = true
+  isInsidePath
 ) {
 
   noStroke();
@@ -1369,7 +1338,9 @@ function drawCircle(
     isInsidePath
   ) {
 
+    // --------------------------------------------------------
     // RED
+    // --------------------------------------------------------
 
     fill(
 
@@ -1383,7 +1354,9 @@ function drawCircle(
 
   else {
 
+    // --------------------------------------------------------
     // BLUE
+    // --------------------------------------------------------
 
     fill(
 
@@ -1399,6 +1372,7 @@ function drawCircle(
   circle(
 
     x,
+
     y,
 
     circleRadius * 2
@@ -1410,12 +1384,15 @@ function drawCircle(
 
 
 // ============================================================
-// FIND ALLOWED PATH SEGMENT
+// FIND ALLOWED SEGMENT
 // ============================================================
 //
-// Only the current segment and its neighbours are considered.
-// This prevents the circle from suddenly jumping to a
-// completely different part of the path.
+// Only the current segment and its immediate neighbours are
+// considered.
+//
+// This prevents the circle from jumping between disconnected
+// parts of the path.
+//
 // ============================================================
 
 function findAllowedSegment(
@@ -1425,34 +1402,47 @@ function findAllowedSegment(
   let candidates = [];
 
 
+  // ----------------------------------------------------------
   // Current segment
+  // ----------------------------------------------------------
 
   candidates.push(
     currentSegment
   );
 
 
+  // ----------------------------------------------------------
   // Previous segment
+  // ----------------------------------------------------------
 
   if (
     currentSegment > 0
   ) {
 
     candidates.push(
+
       currentSegment - 1
+
     );
 
   }
 
 
+  // ----------------------------------------------------------
   // Next segment
+  // ----------------------------------------------------------
 
   if (
-    currentSegment < path.length - 2
+
+    currentSegment <
+    path.length - 2
+
   ) {
 
     candidates.push(
+
       currentSegment + 1
+
     );
 
   }
@@ -1461,16 +1451,19 @@ function findAllowedSegment(
   let bestSegment =
     -1;
 
-
   let bestDistance =
     Infinity;
 
 
+  // ----------------------------------------------------------
+  // Test candidate segments
+  // ----------------------------------------------------------
+
   for (
-    let i of candidates
+    const i of candidates
   ) {
 
-    let a =
+    const a =
       createVector(
 
         path[i].x,
@@ -1480,7 +1473,7 @@ function findAllowedSegment(
       );
 
 
-    let b =
+    const b =
       createVector(
 
         path[i + 1].x,
@@ -1490,18 +1483,19 @@ function findAllowedSegment(
       );
 
 
-    let closest =
+    const closest =
       closestPointOnLine(
 
         position,
 
         a,
+
         b
 
       );
 
 
-    let distance =
+    const distance =
       p5.Vector.dist(
 
         position,
@@ -1527,7 +1521,7 @@ function findAllowedSegment(
 
 
   // ----------------------------------------------------------
-  // Only switch to the segment if we are close enough.
+  // Only accept the segment if close enough
   // ----------------------------------------------------------
 
   if (
@@ -1558,16 +1552,23 @@ function closestPointOnLine(
   b
 ) {
 
-  let line =
+  const line =
     p5.Vector.sub(
+
       b,
+
       a
+
     );
 
 
-  let lineLengthSquared =
+  const lineLengthSquared =
     line.magSq();
 
+
+  // ----------------------------------------------------------
+  // Avoid division by zero
+  // ----------------------------------------------------------
 
   if (
     lineLengthSquared === 0
@@ -1578,25 +1579,34 @@ function closestPointOnLine(
   }
 
 
-  let pointFromA =
+  const pointFromA =
     p5.Vector.sub(
+
       point,
+
       a
+
     );
 
 
   let t =
+
     pointFromA.dot(
       line
     ) /
+
     lineLengthSquared;
 
 
   t =
     constrain(
+
       t,
+
       0,
+
       1
+
     );
 
 
@@ -1613,7 +1623,7 @@ function closestPointOnLine(
 
 
 // ============================================================
-// STATUS
+// STATUS TEXT
 // ============================================================
 
 function setStatus(
