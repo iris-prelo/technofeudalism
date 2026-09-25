@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Web as Territory - AprilTag Position</title>
+
+    <link rel="stylesheet" href="style.css" />
+
+    <!-- p5.js -->
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.11.10/lib/p5.min.js"></script>
+
+    <!-- Comlink -->
+    <script src="https://unpkg.com/comlink/dist/umd/comlink.js"></script>
+  </head>
+
+  <body>
+    <main
+      class="territory-stage"
+      id="territory-stage"
+      aria-label="Web as Territory"
+    >
+      <iframe
+        class="territory-illustration"
+        src="../web_as_territory/index.html"
+        title="Web as Territory illustration"
+      ></iframe>
+      <div id="tracking-layer" aria-hidden="true"></div>
+    </main>
+
+    <video id="video" autoplay playsinline muted></video>
+
+    <label id="camera-control" for="camera-select">
+      Camera
+      <select id="camera-select" disabled>
+        <option>Requesting camera access...</option>
+      </select>
+    </label>
+
+    <div id="status">Starting...</div>
+
+    <script src="main.js"></script>
+  </body>
+</html>

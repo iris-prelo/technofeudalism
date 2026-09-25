@@ -1,0 +1,121 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+
+  width: 100%;
+  height: 100%;
+
+  overflow: auto;
+
+  background: #f7f8fa;
+
+  font-family: Arial, sans-serif;
+}
+
+.territory-stage {
+  position: relative;
+  width: min(100vw, 1498px);
+  aspect-ratio: 1498 / 927;
+  margin: auto;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.territory-illustration,
+#tracking-layer,
+#tracking-layer canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.territory-illustration {
+  z-index: 1;
+}
+
+#tracking-layer {
+  z-index: 2;
+  pointer-events: auto;
+}
+
+#tracking-layer canvas {
+  pointer-events: none;
+}
+
+/* ----------------------------- */
+/* WEBCAM */
+/* ----------------------------- */
+
+#video {
+  position: fixed;
+
+  right: 20px;
+  bottom: 20px;
+
+  width: 240px;
+
+  z-index: 10;
+
+  border: 2px solid #777;
+
+  background: black;
+}
+
+/* ----------------------------- */
+/* STATUS */
+/* ----------------------------- */
+
+#status {
+  position: fixed;
+
+  top: 15px;
+  left: 15px;
+
+  z-index: 20;
+
+  padding: 8px 12px;
+
+  background: white;
+
+  border: 1px solid #ccc;
+
+  border-radius: 6px;
+
+  font-size: 14px;
+}
+
+#camera-control {
+  position: fixed;
+
+  top: 64px;
+  left: 15px;
+
+  z-index: 20;
+
+  padding: 8px 12px;
+
+  background: white;
+
+  border: 1px solid #ccc;
+
+  border-radius: 6px;
+
+  font-size: 14px;
+}
+
+#camera-select {
+  max-width: 260px;
+
+  margin-left: 8px;
+}
+
+/* ----------------------------- */
+/* P5 CANVAS */
+/* ----------------------------- */
+
+canvas {
+  display: block;
+}
