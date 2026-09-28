@@ -5,7 +5,7 @@
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <title>AprilTag Circle Path</title>
+    <title>Web as Territory - AprilTag Position</title>
 
     <link rel="stylesheet" href="style.css" />
 
@@ -17,7 +17,19 @@
   </head>
 
   <body>
-    <!-- Webcam -->
+    <main
+      class="territory-stage"
+      id="territory-stage"
+      aria-label="Web as Territory"
+    >
+      <iframe
+        class="territory-illustration"
+        src="../web_as_territory/index.html"
+        title="Web as Territory illustration"
+      ></iframe>
+      <div id="tracking-layer" aria-hidden="true"></div>
+    </main>
+
     <video id="video" autoplay playsinline muted></video>
 
     <label id="camera-control" for="camera-select">
@@ -27,10 +39,8 @@
       </select>
     </label>
 
-    <!-- Status -->
     <div id="status">Starting...</div>
 
-    <!-- p5 -->
     <script src="main.js"></script>
   </body>
 </html>
