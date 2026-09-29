@@ -1,10 +1,4 @@
-const TAG_CORNERS = {
-  0: "top-left",
-  1: "top-right",
-  2: "bottom-right",
-  3: "bottom-left"
-};
-const TAG_IDS = new Set(Object.keys(TAG_CORNERS).map(Number));
+const TAG_IDS = new Set([0, 1, 2, 3]);
 const mapWidth = 1498;
 const mapHeight = 927;
 const TAG_WORLD_SIZE = 80;
@@ -14,27 +8,13 @@ const TAG_WORLD_POSITIONS = {
   2: { x: mapWidth - 100, y: mapHeight - 100 },
   3: { x: 100, y: mapHeight - 100 }
 };
-// Rotation of each printed tag's top edge in map coordinates, in degrees.
-const TAG_WORLD_ROTATIONS = {
-  0: 0,
-  1: 0,
-  2: 0,
-  3: 0
-};
 const circleRadius = 16;
-const movementScale = 1.25;
-const movementDeadzone = 1.5;
-const movementSmoothing = 0.18;
-const maximumMovement = 10;
 
 let circleX = mapWidth / 2;
 let circleY = mapHeight / 2;
 let detectedTags = {};
-let previousSquareCenter = null;
 let apriltag = null;
 let detecting = false;
-let smoothedMovementX = 0;
-let smoothedMovementY = 0;
 let cameraHeading = 0;
 let cameraPoseValid = false;
 let smoothedCameraX = null;
@@ -49,11 +29,6 @@ let cameraSelect;
 let selectedCameraId = "";
 let cameraWidth = 640;
 let cameraHeight = 480;
-
-function updateTerritoryPopup() {
-  const iframe = document.querySelector(".territory-illustration");
-  iframe?.contentWindow?.setExternalPosition?.(circleX, circleY);
-}
 
 async function setup() {
   const trackingCanvas = createCanvas(mapWidth, mapHeight);
@@ -76,9 +51,6 @@ async function setup() {
   await startCamera();
   if (!cameraStream) return;
 
-  cameraCanvas = document.createElement("canvas");
-  cameraCanvas.width = cameraWidth;
-  cameraCanvas.height = cameraHeight;
   await startAprilTag();
 }
 
@@ -209,17 +181,14 @@ function calculateCameraPose() {
     const corners = detection.corners;
     if (!worldCenter || !Array.isArray(corners) || corners.length < 4) continue;
 
-    const rotation = (TAG_WORLD_ROTATIONS[detection.id] || 0) * Math.PI / 180;
-    const cosRotation = Math.cos(rotation);
-    const sinRotation = Math.sin(rotation);
     const worldCorners = [
       { x: -halfTagSize, y: -halfTagSize },
       { x: halfTagSize, y: -halfTagSize },
       { x: halfTagSize, y: halfTagSize },
       { x: -halfTagSize, y: halfTagSize }
     ].map(corner => ({
-      x: worldCenter.x + corner.x * cosRotation - corner.y * sinRotation,
-      y: worldCenter.y + corner.x * sinRotation + corner.y * cosRotation
+      x: worldCenter.x + corner.x,
+      y: worldCenter.y + corner.y
     }));
 
     for (let cornerIndex = 0; cornerIndex < 4; cornerIndex++) {
@@ -255,7 +224,6 @@ function calculateCameraPose() {
   circleY = constrain(smoothedCameraY, circleRadius, mapHeight - circleRadius);
   cameraHeading = smoothedCameraHeading;
   cameraPoseValid = true;
-  updateTerritoryPopup();
 }
 
 function interpolateAngle(from, to, amount) {
@@ -380,59 +348,6 @@ function drawCameraOverlay() {
       context.fill();
     }
   }
-}
-
-function calculateCameraMovement() {
-  const topLeft = detectedTags[0];
-  const topRight = detectedTags[1];
-  const bottomRight = detectedTags[2];
-  const bottomLeft = detectedTags[3];
-  const squareCenters = [];
-
-  if (topLeft && bottomRight) {
-    squareCenters.push({
-      x: (topLeft.center.x + bottomRight.center.x) / 2,
-      y: (topLeft.center.y + bottomRight.center.y) / 2
-    });
-  }
-  if (topRight && bottomLeft) {
-    squareCenters.push({
-      x: (topRight.center.x + bottomLeft.center.x) / 2,
-      y: (topRight.center.y + bottomLeft.center.y) / 2
-    });
-  }
-
-  if (squareCenters.length === 0) {
-    const visibleCenters = Object.values(detectedTags).map(detection => detection.center);
-    if (visibleCenters.length === 0) return;
-    squareCenters.push(...visibleCenters);
-  }
-
-  const squareCenter = {
-    x: squareCenters.reduce((sum, center) => sum + center.x, 0) / squareCenters.length,
-    y: squareCenters.reduce((sum, center) => sum + center.y, 0) / squareCenters.length
-  };
-
-  if (!previousSquareCenter) {
-    previousSquareCenter = squareCenter;
-    return;
-  }
-
-  const tagMovementX = squareCenter.x - previousSquareCenter.x;
-  const tagMovementY = squareCenter.y - previousSquareCenter.y;
-  previousSquareCenter = squareCenter;
-  const targetMovementX = Math.abs(tagMovementX) > movementDeadzone ? tagMovementX : 0;
-  const targetMovementY = Math.abs(tagMovementY) > movementDeadzone ? tagMovementY : 0;
-
-  smoothedMovementX += (targetMovementX - smoothedMovementX) * movementSmoothing;
-  smoothedMovementY += (targetMovementY - smoothedMovementY) * movementSmoothing;
-
-  const movementX = constrain(smoothedMovementX, -maximumMovement, maximumMovement);
-  const movementY = constrain(smoothedMovementY, -maximumMovement, maximumMovement);
-
-  circleX = constrain(circleX - movementX * movementScale, circleRadius, mapWidth - circleRadius);
-  circleY = constrain(circleY - movementY * movementScale, circleRadius, mapHeight - circleRadius);
-  updateTerritoryPopup();
 }
 
 function draw() {

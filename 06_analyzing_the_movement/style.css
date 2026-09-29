@@ -22,7 +22,6 @@ body {
   isolation: isolate;
 }
 
-.territory-illustration,
 #tracking-layer,
 #tracking-layer canvas {
   position: absolute;
@@ -30,10 +29,6 @@ body {
   width: 100%;
   height: 100%;
   border: 0;
-}
-
-.territory-illustration {
-  z-index: 1;
 }
 
 #tracking-layer {
