@@ -32,7 +32,10 @@
       <div id="tracking-layer" aria-hidden="true"></div>
     </main>
 
-    <video id="video" autoplay playsinline muted></video>
+    <div id="camera-view">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="camera-overlay" aria-hidden="true"></canvas>
+    </div>
 
     <label id="camera-control" for="camera-select">
       Camera
