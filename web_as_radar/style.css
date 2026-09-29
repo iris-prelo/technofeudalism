@@ -1,3 +1,9 @@
+@font-face {
+    font-family: 'ABC Diatype Mono Medium';
+    src: url('assets/ABCDiatypeMonoEdu-Medium.otf') format('otf');
+    font-weight: medium;
+}
+
 body {
     background-color: white;
     width: 100vw;
@@ -20,6 +26,26 @@ body {
     justify-content: center;
 }
 
+.vertical-line {
+    width: 95vh;
+    height: 95vh;
+    position: absolute;
+}
+
+.horizontal-line {
+    width: 95vh;
+    height: 95vh;
+    position: absolute;
+}
+
+.info-box {
+    position: absolute;
+    top: 50vh;
+    left: 50%;
+    height: 27.1vh;
+    width: auto;
+}
+
 .compass-container {
     width: 95vh;
     height: 95vh;
@@ -34,6 +60,9 @@ body {
     height: 3vh;
     border-radius: 50%;
     position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .north {
@@ -65,4 +94,14 @@ body {
     justify-content: center;
     align-items: center;
     position: absolute;
+    width: 5vh;
+}
+
+.direction-text {
+    position: absolute;
+    font-size: 2vh;
+    font-weight: bold;
+    color: white;
+    margin: 0;
+    font-family: 'ABC Diatype Mono Medium', monospace;
 }
