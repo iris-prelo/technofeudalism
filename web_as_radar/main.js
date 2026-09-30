@@ -183,6 +183,13 @@
         geometry = { left, top, spacing, nx, ny, radius };
     }
     createMap();
+    window.publicPointCount = [...lookup.values()].filter(point => sites[point.owner].kind === 'public').length;
+    window.isPrivateMapPosition = (x, y) => {
+        const gx = Math.round((x - geometry.left) / geometry.spacing);
+        const gy = Math.round((y - geometry.top) / geometry.spacing);
+        const point = lookup.get(key(gx, gy));
+        return Boolean(point && sites[point.owner].kind === 'private');
+    };
 
     // Zeigerkoordinaten im Fenster werden auf den Kartenausschnitt bezogen.
     // An jedem Bildpunkt gilt: mapX/mapY liegt exakt unter dem festen Icon.
@@ -209,16 +216,26 @@
         const { left, top, spacing, nx, ny } = geometry;
         const gx = Math.round((mapX - left) / spacing), gy = Math.round((mapY - top) / spacing);
         const point = (gx >= 0 && gx < nx && gy >= 0 && gy < ny) ? lookup.get(key(gx, gy)) : null;
-        if (point && Math.hypot(point.x - mapX, point.y - mapY) < spacing * .55) {
+        const active = point;
+        if (active) {
             const site = sites[point.owner];
             infoVisitors.textContent = `${site.visits.toFixed(1)}b`;
             infoType.textContent = site.kind;
             infoAddress.textContent = site.name;
         } else {
             infoVisitors.textContent = '—';
-            infoType.textContent = 'no data';
+            infoType.textContent = 'public ground';
             infoAddress.textContent = '';
         }
+        document.dispatchEvent(new CustomEvent('territorychange', {
+            detail: {
+                site: active ? sites[active.owner] : null,
+                gx: active?.gx, gy: active?.gy,
+                x: mapX / MAP_WIDTH, y: mapY / MAP_HEIGHT,
+                mapX, mapY,
+                zoom: locationIcon.getBoundingClientRect().width / (2 * geometry.radius)
+            }
+        }));
     }
     function moveTo(clientX, clientY) {
         mapX = clamp(clientX / window.innerWidth, 0, 1) * MAP_WIDTH;

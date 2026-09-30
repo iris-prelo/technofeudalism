@@ -7,12 +7,23 @@
     <title>Territorien des Webs</title>
     <link rel="stylesheet" href="style.css">
     <script src="main.js" defer></script>
+    <script src="experience.js" defer></script>
 </head>
 
 <body>
     <div class="circle">
         <canvas id="map-canvas" class="map-canvas" aria-hidden="true"></canvas>
 
+        <section class="experience" aria-live="polite">
+            <article class="wiki-panel" hidden>
+                <img class="mask" src="assets/mask_public_area.svg" alt="" aria-hidden="true">
+                <iframe class="wiki-frame" title="Wikipedia article" sandbox="allow-same-origin" tabindex="-1"></iframe>
+                <div class="wiki-loading" role="status">Loading Wikipedia article …</div>
+                <a class="wiki-original" target="_blank" rel="noopener noreferrer"
+                    aria-label="Open article on Wikipedia">↗</a>
+            </article>
+            <div class="private-layer"></div>
+        </section>
         <div class="info">
             <img src="assets/infobox.svg" alt="" class="info-box">
             <div class="info-data">

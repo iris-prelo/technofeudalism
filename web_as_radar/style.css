@@ -69,6 +69,7 @@ body {
     top: 50%;
     left: 50%;
     pointer-events: none;
+    z-index: 10;
 }
 
 .info-box {
@@ -154,4 +155,233 @@ body {
     color: white;
     margin: 0;
     font-family: 'ABC Diatype Mono Medium', monospace;
+}
+
+/* Inhaltsebene über der Karte und unter dem Standortzeichen. */
+.experience {
+    position: absolute;
+    inset: 4%;
+    overflow: hidden;
+    border-radius: 50%;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.wiki-panel {
+    position: absolute;
+    inset: 8% 12% 11%;
+    padding: 5% 8%;
+    background: rgba(255, 255, 255, .92);
+    color: #151515;
+    border-radius: 42% 42% 38% 38% / 16% 16% 18% 18%;
+    box-shadow: 0 10px 50px #0003;
+    font-family: Georgia, serif;
+    display: flex;
+    flex-direction: column;
+}
+
+.wiki-panel[hidden] {
+    display: none;
+}
+
+.wiki-source,
+.wiki-panel a {
+    font: 500 clamp(10px, 1.4vh, 15px) monospace;
+    letter-spacing: .08em;
+}
+
+.wiki-panel h1 {
+    font-size: clamp(20px, 3.8vh, 42px);
+    line-height: 1.1;
+    margin: 5% 0 3%;
+}
+
+.wiki-scroll {
+    flex: 1;
+    overflow: hidden;
+    mask-image: linear-gradient(#000 85%, transparent);
+    white-space: pre-line;
+    font-size: clamp(13px, 2vh, 20px);
+    line-height: 1.55;
+}
+
+.wiki-panel a {
+    pointer-events: auto;
+    color: #252ca1;
+    padding: 1em 0;
+    align-self: flex-start;
+}
+
+.private-layer {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity .45s;
+}
+
+.circle[data-mode="private"] .private-layer {
+    opacity: 1;
+}
+
+.circle[data-mode="private"] .map-canvas,
+.circle[data-mode="private"] .compass-container,
+.circle[data-mode="private"] .compass-pointer,
+.circle[data-mode="private"] .vertical-line,
+.circle[data-mode="private"] .horizontal-line {
+    visibility: hidden;
+}
+
+.circle[data-mode="private"] {
+    background: #171827;
+}
+
+.circle[data-mode="private"] .location-icon {
+    filter: drop-shadow(0 0 8px white);
+}
+
+/* Die SVG-Form ist die sichtbare Fläche und die tatsächliche Schnittmaske. */
+.experience {
+    inset: 0;
+}
+
+.wiki-panel {
+    inset: auto;
+    width: 95%;
+    aspect-ratio: 657 / 517;
+    height: auto;
+    top: 2.5vh;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0;
+    border-radius: 0;
+    background: white;
+    box-shadow: none;
+    mask-image: url('assets/mask_public_area.svg');
+    -webkit-mask-image: url('assets/mask_public_area.svg');
+    mask-size: 100% 100%;
+    -webkit-mask-size: 100% 100%;
+    mask-repeat: no-repeat;
+    -webkit-mask-repeat: no-repeat;
+}
+
+.mask {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.wiki-content {
+    position: absolute;
+    inset: 0;
+    padding: 10% 16% 6%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.wiki-panel h1 {
+    margin: 4% 0 3%;
+}
+
+.wiki-scroll {
+    min-height: 0;
+}
+
+.private-layer {
+    inset: 4%;
+    border-radius: 50%;
+    overflow: hidden;
+}
+
+@media (max-width: 600px) {
+    .wiki-panel {
+        inset: auto;
+        top: 2.5vh;
+        left: 50%;
+    }
+
+    .wiki-content {
+        padding: 10% 15% 6%;
+    }
+}
+
+/* Vollständig gerenderter Wikipedia-Inhalt, im abgeschirmten Frame der Maske. */
+.wiki-frame {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: white;
+    pointer-events: none;
+}
+
+.wiki-loading {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: white;
+    color: #202122;
+    font: 16px Arial, sans-serif;
+}
+
+.wiki-loading[hidden] {
+    display: none;
+}
+
+.wiki-original {
+    position: absolute;
+    right: 7%;
+    bottom: 5%;
+    padding: .3em .55em;
+    border: 1px solid #a2a9b1;
+    background: #fff;
+    color: #36c;
+    font: 700 18px Arial, sans-serif;
+    text-decoration: none;
+    pointer-events: auto;
+}
+
+.wiki-original:not([href]) {
+    display: none;
+}
+
+/* Räumlich verankerte Platzhalter für private Inhalte. */
+.private-layer {
+    inset: 0;
+    border-radius: 50%;
+    overflow: hidden;
+}
+
+.territory-popup {
+    position: absolute;
+    width: var(--popup-width);
+    height: var(--popup-height);
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(.86);
+    transition: left .11s linear, top .11s linear, opacity .4s ease,
+        transform .4s cubic-bezier(.2, .8, .2, 1);
+}
+
+.territory-popup.visible {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+}
+
+.territory-popup.has-image {
+    background: transparent !important;
+}
+
+.territory-popup img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
 }
