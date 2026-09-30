@@ -247,7 +247,6 @@
     async function article(id) {
         if (pointId === id) return;
         pointId = id;
-        scrollPosition = 0;
         const token = ++requestId;
         frame.removeAttribute('srcdoc');
         loading.textContent = 'Loading Wikipedia article …'; loading.hidden = false;
@@ -285,16 +284,57 @@
             if (traveled > 90 && performance.now() - lastPopupAt > 950) addPopup();
         }
     });
-    let last = 0, scrollPosition = 0;
+    const gpioButtons = { up: false, down: false };
+    const keyboardButtons = { up: false, down: false };
+    async function pollButtons() {
+        try {
+            const response = await fetch('buttons', { cache: 'no-store' });
+            if (!response.ok) throw new Error(`Button server: ${response.status}`);
+            const state = await response.json();
+            gpioButtons.up = state.up === true;
+            gpioButtons.down = state.down === true;
+        } catch (error) {
+            gpioButtons.up = false;
+            gpioButtons.down = false;
+        } finally {
+            window.setTimeout(pollButtons, 50);
+        }
+    }
+    for (const [eventName, pressed] of [['keydown', true], ['keyup', false]]) {
+        window.addEventListener(eventName, event => {
+            const direction = event.key === 'ArrowUp' ? 'up'
+                : event.key === 'ArrowDown' ? 'down' : null;
+            if (!direction) return;
+            keyboardButtons[direction] = pressed;
+            event.preventDefault();
+        });
+    }
+    window.addEventListener('blur', () => {
+        keyboardButtons.up = keyboardButtons.down = false;
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            keyboardButtons.up = keyboardButtons.down = false;
+            gpioButtons.up = gpioButtons.down = false;
+        }
+    });
+    let lastScrollFrame = 0;
     function scroll(time) {
-        if (mode === 'public' && pointId && loading.hidden && time - last > 40) {
-            scrollPosition += .35;
-            try { frame.contentWindow.scrollTo(0, scrollPosition); } catch (error) { /* sandbox or loading */ }
-            last = time;
-        } else if (!pointId) scrollPosition = 0;
+        const elapsed = Math.min(0.05, (time - (lastScrollFrame || time)) / 1000);
+        lastScrollFrame = time;
+        if (mode === 'public' && pointId && loading.hidden) {
+            const up = gpioButtons.up || keyboardButtons.up;
+            const down = gpioButtons.down || keyboardButtons.down;
+            const direction = Number(down) - Number(up);
+            if (direction) {
+                try { frame.contentWindow.scrollBy(0, direction * 220 * elapsed); }
+                catch (error) { /* iFrame ist noch nicht geladen. */ }
+            }
+        }
         requestAnimationFrame(scroll);
     }
     requestAnimationFrame(scroll);
+    void pollButtons();
     void preloadArticles();
     // main.js zeichnet vor dem Registrieren dieses Listeners das erste Bild.
     window.dispatchEvent(new PointerEvent('pointermove', { clientX: innerWidth / 2, clientY: innerHeight / 2 }));
