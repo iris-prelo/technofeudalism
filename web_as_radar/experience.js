@@ -6,8 +6,13 @@
     const loading = wiki.querySelector('.wiki-loading');
     const link = wiki.querySelector('.wiki-original');
     const layer = document.querySelector('.private-layer');
+    const reveal = document.querySelector('.private-reveal');
+    const locationIcon = document.querySelector('.location-icon');
+    let revealAnimation = null;
     const articleByPoint = new Map();
+    const documentByPoint = new Map();
     const articleQueue = [];
+    let refillPromise = null;
     const shuffle = items => {
         for (let i = items.length - 1; i > 0; i--) {
             const j = pick(i + 1);
@@ -40,8 +45,10 @@
         if (articleByPoint.has(id)) return articleByPoint.get(id);
         await poolPromise;
         if (!articleQueue.length) {
-            poolPromise = fetchRandomWikipediaArticles(50).then(pages => { articleQueue.push(...pages); });
-            await poolPromise;
+            if (!refillPromise) refillPromise = fetchRandomWikipediaArticles(50)
+                .then(pages => { articleQueue.push(...pages); })
+                .finally(() => { refillPromise = null; });
+            await refillPromise;
         }
         const page = articleQueue.pop();
         if (!page) throw new Error('No random article available');
@@ -91,9 +98,9 @@
         popup.dataset.mapX = String(anchor.x);
         popup.dataset.mapY = String(anchor.y);
         popup.style.backgroundColor = colors[pick(colors.length)];
-        const large = Math.random() < .22;
-        popup.style.setProperty('--popup-width', `${large ? 46 + pick(13) : 28 + pick(15)}%`);
-        popup.style.setProperty('--popup-height', `${large ? 52 + pick(17) : 29 + pick(23)}%`);
+        // Alle Inhalte verwenden die bisherige, größere Anzeigenfläche.
+        popup.style.setProperty('--popup-width', `${76 + pick(13)}%`);
+        popup.style.setProperty('--popup-height', `${78 + pick(13)}%`);
         const siteName = position.siteName;
         const popupNumber = ++popupCount;
         manifestPromise.then(manifest => {
@@ -103,10 +110,6 @@
             const useAd = popupNumber > 1 && adImages.length > 0 && Math.random() < .22;
             const images = useAd ? adImages : siteImages;
             if (!images.length) return; // Farbe zeigt einen noch leeren Ordner an.
-            if (useAd) {
-                popup.style.setProperty('--popup-width', `${76 + pick(13)}%`);
-                popup.style.setProperty('--popup-height', `${78 + pick(13)}%`);
-            }
             const img = document.createElement('img');
             img.alt = useAd ? 'Advertisement' : `${siteName} content`;
             img.src = imageURL(images[pick(images.length)]);
@@ -132,6 +135,34 @@
         window.clearInterval(popupTimer);
         popupTimer = null;
         layer.replaceChildren();
+    }
+    function animatePrivateBoundary(entering) {
+        const circleSize = circle.getBoundingClientRect().width;
+        const small = locationIcon.getBoundingClientRect().width / circleSize;
+        const wasAnimating = reveal.classList.contains('is-active');
+        const from = wasAnimating ? reveal.getBoundingClientRect().width / circleSize
+            : entering ? small : 1;
+        revealAnimation?.cancel();
+        circle.style.setProperty('--reveal-start', String(small));
+        circle.classList.remove('private-ready');
+        reveal.classList.add('is-active');
+        const to = entering ? 1 : small;
+        const animation = reveal.animate(
+            [{ transform: `scale(${from})` }, { transform: `scale(${to})` }],
+            {
+                duration: Math.max(150, 800 * Math.abs(to - from) / (1 - small)),
+                easing: 'cubic-bezier(.22, .65, .22, 1)',
+                fill: 'forwards'
+            }
+        );
+        revealAnimation = animation;
+        animation.onfinish = () => {
+            if (revealAnimation !== animation) return;
+            if (entering && mode === 'private') circle.classList.add('private-ready');
+            reveal.classList.remove('is-active');
+            animation.cancel();
+            revealAnimation = null;
+        };
     }
     const escapeHTML = value => String(value).replace(/[&<>"']/g, char => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -177,6 +208,42 @@
       <div class="tabs"><span><b>Article</b>&nbsp;&nbsp; Talk</span><span><b>Read</b>&nbsp;&nbsp; View source&nbsp;&nbsp; View history</span></div>
       ${articleHTML}</main></body></html>`;
     }
+    function documentForPoint(id) {
+        if (!documentByPoint.has(id)) {
+            const request = (async () => {
+                const page = await pageForPoint(id);
+                const params = new URLSearchParams({
+                    action: 'parse', format: 'json', formatversion: '2', origin: '*',
+                    pageid: String(page.id), prop: 'text', redirects: '1', disableeditsection: '1'
+                });
+                const response = await fetch(`https://en.wikipedia.org/w/api.php?${params}`);
+                if (!response.ok) throw new Error(`Wikipedia API: ${response.status}`);
+                const data = await response.json();
+                const html = data.parse?.text;
+                if (typeof html !== 'string') throw new Error('No parsed article HTML');
+                const title = data.parse.title || page.title;
+                return {
+                    srcdoc: articleDocument(title, cleanArticleHTML(html)),
+                    url: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(title)
+                };
+            })();
+            documentByPoint.set(id, request);
+            request.catch(() => { if (documentByPoint.get(id) === request) documentByPoint.delete(id); });
+        }
+        return documentByPoint.get(id);
+    }
+    // Alle weißen Punkte werden nach dem Start im Hintergrund vorbereitet.
+    // Ein gerade betretenes Feld kann seinen eigenen Request sofort starten.
+    async function preloadArticles() {
+        const ids = shuffle([...(window.publicPointIds || [])]);
+        let nextIndex = 0;
+        await Promise.all(Array.from({ length: 6 }, async () => {
+            while (nextIndex < ids.length) {
+                const id = ids[nextIndex++];
+                try { await documentForPoint(id); } catch (error) { /* Beim Betreten erneut versuchen. */ }
+            }
+        }));
+    }
     async function article(id) {
         if (pointId === id) return;
         pointId = id;
@@ -186,21 +253,12 @@
         loading.textContent = 'Loading Wikipedia article …'; loading.hidden = false;
         link.removeAttribute('href'); wiki.hidden = false;
         try {
-            const page = await pageForPoint(id);
+            const prepared = await documentForPoint(id);
             if (token !== requestId) return;
-            const params = new URLSearchParams({
-                action: 'parse', format: 'json', formatversion: '2', origin: '*',
-                pageid: String(page.id), prop: 'text', redirects: '1', disableeditsection: '1'
-            });
-            const response = await fetch(`https://en.wikipedia.org/w/api.php?${params}`);
-            if (!response.ok) throw new Error(`Wikipedia API: ${response.status}`);
-            const data = await response.json();
-            if (token !== requestId) return;
-            const html = data.parse?.text;
-            if (typeof html !== 'string') throw new Error('No parsed article HTML');
-            frame.onload = () => { if (token === requestId) loading.hidden = true; };
-            frame.srcdoc = articleDocument(data.parse.title || page.title, cleanArticleHTML(html));
-            link.href = 'https://en.wikipedia.org/wiki/' + encodeURIComponent(data.parse.title || page.title);
+            frame.srcdoc = prepared.srcdoc;
+            link.href = prepared.url;
+            // Nicht auf Bilder und Audio im iFrame warten: HTML sofort zeigen.
+            requestAnimationFrame(() => { if (token === requestId) loading.hidden = true; });
         } catch (error) {
             if (token === requestId) loading.textContent = 'The article could not be loaded. Try another point.';
         }
@@ -211,7 +269,10 @@
         position = { mapX, mapY, zoom, siteName: site?.name || '' };
         const next = site?.kind === 'private' ? 'private' : 'public';
         if (next !== mode) {
+            const previous = mode;
             mode = next;
+            if (mode === 'private') animatePrivateBoundary(true);
+            else if (previous === 'private') animatePrivateBoundary(false);
             circle.dataset.mode = mode;
             if (mode === 'private') { hideArticle(); startPopups(); }
             else stopPopups();
@@ -234,6 +295,7 @@
         requestAnimationFrame(scroll);
     }
     requestAnimationFrame(scroll);
+    void preloadArticles();
     // main.js zeichnet vor dem Registrieren dieses Listeners das erste Bild.
     window.dispatchEvent(new PointerEvent('pointermove', { clientX: innerWidth / 2, clientY: innerHeight / 2 }));
 })();

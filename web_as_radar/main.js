@@ -5,6 +5,7 @@
     const MAP_WIDTH = 1440;
     const MAP_HEIGHT = 900;
     const BACKGROUND = '#858587';
+    const PRIVATE_BLUE = '#0b3df5';
     const sites = [
         { name: 'google.com', visits: 86.6, kind: 'private' },
         { name: 'youtube.com', visits: 30.4, kind: 'private' },
@@ -86,6 +87,7 @@
     }
 
     const circle = document.querySelector('.circle');
+    circle.style.setProperty('--private-blue', PRIVATE_BLUE);
     const canvas = document.getElementById('map-canvas');
     const locationIcon = document.querySelector('.location-icon');
     const infoLocation = document.querySelector('.info-location');
@@ -175,7 +177,7 @@
         }
         // Blaue Flächen zuerst, der weiße Weg liegt klar darüber.
         for (const kind of ['private', 'public']) {
-            ctx.fillStyle = kind === 'private' ? '#0b3df5' : '#ffffff'; ctx.beginPath();
+            ctx.fillStyle = kind === 'private' ? PRIVATE_BLUE : '#ffffff'; ctx.beginPath();
             for (const c of final) if (sites[c.owner].kind === kind) { ctx.moveTo(c.x + radius, c.y); ctx.arc(c.x, c.y, radius, 0, Math.PI * 2) }
             ctx.fill();
         }
@@ -183,7 +185,10 @@
         geometry = { left, top, spacing, nx, ny, radius };
     }
     createMap();
-    window.publicPointCount = [...lookup.values()].filter(point => sites[point.owner].kind === 'public').length;
+    window.publicPointIds = [...lookup.values()]
+        .filter(point => sites[point.owner].kind === 'public')
+        .map(point => key(point.gx, point.gy));
+    window.publicPointCount = window.publicPointIds.length;
     window.isPrivateMapPosition = (x, y) => {
         const gx = Math.round((x - geometry.left) / geometry.spacing);
         const gy = Math.round((y - geometry.top) / geometry.spacing);
