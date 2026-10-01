@@ -20,6 +20,29 @@ body {
   padding: 0;
 }
 
+.wiki-preload {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  background: #858587;
+  color: white;
+  text-align: center;
+  font: 500 clamp(14px, 2vh, 20px) "ABC Diatype Mono Medium", monospace;
+}
+
+.wiki-preload[hidden],
+.wiki-preload button[hidden] {
+  display: none;
+}
+
+.wiki-preload button {
+  padding: .5em 1em;
+  font: inherit;
+  cursor: pointer;
+}
+
 #tracking-layer {
   position: absolute;
   inset: 0;
@@ -73,10 +96,12 @@ body {
 #camera-control {
   top: 1.5rem;
 }
+
 #status {
   bottom: 1.5rem;
   max-width: min(44rem, calc(100vw - 3rem));
 }
+
 #camera-select {
   max-width: min(22rem, 42vw);
   margin-left: 0.4rem;

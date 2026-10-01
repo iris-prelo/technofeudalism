@@ -208,7 +208,10 @@
       geometry = { left, top, spacing, nx, ny, radius };
     }
     createMap();
-    window.publicPointCount = [...lookup.values()].filter((point) => sites[point.owner].kind === "public").length;
+    window.publicPointIds = [...lookup.values()]
+      .filter((point) => sites[point.owner].kind === "public")
+      .map((point) => key(point.gx, point.gy));
+    window.publicPointCount = window.publicPointIds.length;
     window.isPrivateMapPosition = (x, y) => {
       const gx = Math.round((x - geometry.left) / geometry.spacing);
       const gy = Math.round((y - geometry.top) / geometry.spacing);
@@ -359,9 +362,10 @@
     const reveal = document.querySelector(".private-reveal");
     const locationIcon = document.querySelector(".location-icon");
     let revealAnimation = null;
-    const articleByPoint = /* @__PURE__ */ new Map();
-    const articleQueue = [];
-    const articleContentById = /* @__PURE__ */ new Map();
+    const preparedByPoint = new Map();
+    const preloadOverlay = document.getElementById("wiki-preload");
+    const preloadStatus = document.getElementById("wiki-preload-status");
+    let preloadPromise;
     const shuffle = (items) => {
       for (let i = items.length - 1; i > 0; i--) {
         const j = pick(i + 1);
@@ -389,54 +393,46 @@
       const pages = (await Promise.all(requests)).flat();
       return shuffle([...new Map(pages.map((page) => [page.id, page])).values()]);
     }
-    async function preloadWikipediaArticles(pages) {
-      const batchSize = 20;
-      const batches = [];
-      for (let index = 0; index < pages.length; index += batchSize) {
-        batches.push(pages.slice(index, index + batchSize));
+    async function fetchParsedArticle(page) {
+      const params = new URLSearchParams({
+        action: "parse", format: "json", formatversion: "2", origin: "*",
+        pageid: String(page.id), prop: "text", redirects: "1", disableeditsection: "1"
+      });
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const response = await fetch(`https://en.wikipedia.org/w/api.php?${params}`);
+          if (!response.ok) throw new Error(`Wikipedia API: ${response.status}`);
+          const data = await response.json();
+          if (typeof data.parse?.text !== "string") throw new Error("No parsed article HTML");
+          const title = data.parse.title || page.title;
+          return {
+            srcdoc: articleDocument(title, cleanArticleHTML(data.parse.text)),
+            url: "https://en.wikipedia.org/wiki/" + encodeURIComponent(title)
+          };
+        } catch (error) {
+          if (attempt === 2) throw error;
+          await new Promise((resolve) => setTimeout(resolve, 750 * (attempt + 1)));
+        }
       }
-      await Promise.all(batches.map(async (batch) => {
-        if (!batch.length) return;
-        const params = new URLSearchParams({
-          action: "query",
-          format: "json",
-          formatversion: "2",
-          origin: "*",
-          pageids: batch.map((page) => page.id).join("|"),
-          prop: "extracts",
-          redirects: "1"
-        });
-        const response = await fetch(`https://en.wikipedia.org/w/api.php?${params}`);
-        if (!response.ok) throw new Error(`Wikipedia API: ${response.status}`);
-        const data = await response.json();
-        for (const page of data.query?.pages || []) {
-          if (typeof page.extract === "string") {
-            articleContentById.set(page.pageid, { title: page.title, html: page.extract });
-          }
+    }
+    async function preloadWikipediaArticles() {
+      const ids = window.publicPointIds || [];
+      const unique = new Map();
+      for (let attempt = 0; unique.size < ids.length && attempt < 4; attempt++) {
+        const pages = await fetchRandomWikipediaArticles(ids.length - unique.size + 10);
+        for (const page of pages) unique.set(page.id, page);
+      }
+      if (unique.size < ids.length) throw new Error("Not enough random Wikipedia articles");
+      const pages = shuffle([...unique.values()]).slice(0, ids.length);
+      let nextIndex = 0;
+      let completed = 0;
+      await Promise.all(Array.from({ length: 4 }, async () => {
+        while (nextIndex < ids.length) {
+          const index = nextIndex++;
+          preparedByPoint.set(ids[index], await fetchParsedArticle(pages[index]));
+          preloadStatus.textContent = `Loading Wikipedia articles: ${++completed} / ${ids.length}`;
         }
       }));
-    }
-    let poolPromise = fetchRandomWikipediaArticles(window.publicPointCount || 100).then((pages) => {
-      articleQueue.push(...pages);
-      preloadWikipediaArticles(pages).catch(() => {
-      });
-    }).catch(() => {
-    });
-    async function pageForPoint(id) {
-      if (articleByPoint.has(id)) return articleByPoint.get(id);
-      await poolPromise;
-      if (!articleQueue.length) {
-        poolPromise = fetchRandomWikipediaArticles(50).then((pages) => {
-          articleQueue.push(...pages);
-          preloadWikipediaArticles(pages).catch(() => {
-          });
-        });
-        await poolPromise;
-      }
-      const page = articleQueue.pop();
-      if (!page) throw new Error("No random article available");
-      articleByPoint.set(id, page);
-      return page;
     }
     const colors = ["#ee645b", "#ffc247", "#8bd9c4", "#8b94ef", "#f39bd2", "#a7df60", "#62b9ee"];
     const manifestPromise = fetch("assets/content-manifest.json", { cache: "no-store" }).then((response) => {
@@ -602,7 +598,6 @@
     async function article(id) {
       if (pointId === id) return;
       pointId = id;
-      scrollPosition = 0;
       const token = ++requestId;
       frame.removeAttribute("srcdoc");
       loading.textContent = "Loading Wikipedia article \u2026";
@@ -610,34 +605,16 @@
       link.removeAttribute("href");
       wiki.hidden = false;
       try {
-        const page = await pageForPoint(id);
+        await preloadPromise;
         if (token !== requestId) return;
-        let content = articleContentById.get(page.id);
-        if (!content) {
-          const params = new URLSearchParams({
-            action: "parse",
-            format: "json",
-            formatversion: "2",
-            origin: "*",
-            pageid: String(page.id),
-            prop: "text",
-            redirects: "1",
-            disableeditsection: "1"
-          });
-          const response = await fetch(`https://en.wikipedia.org/w/api.php?${params}`);
-          if (!response.ok) throw new Error(`Wikipedia API: ${response.status}`);
-          const data = await response.json();
-          const html = data.parse?.text;
-          if (typeof html !== "string") throw new Error("No parsed article HTML");
-          content = { title: data.parse.title || page.title, html };
-          articleContentById.set(page.id, content);
-        }
-        if (token !== requestId) return;
-        frame.onload = () => {
+        const prepared = preparedByPoint.get(id);
+        if (!prepared) throw new Error("Article was not prepared");
+        frame.srcdoc = prepared.srcdoc;
+        link.href = prepared.url;
+        // Text sofort anzeigen; Bilder im iFrame dürfen danach weiterladen.
+        requestAnimationFrame(() => {
           if (token === requestId) loading.hidden = true;
-        };
-        frame.srcdoc = articleDocument(content.title || page.title, cleanArticleHTML(content.html));
-        link.href = "https://en.wikipedia.org/wiki/" + encodeURIComponent(content.title || page.title);
+        });
       } catch (error) {
         if (token === requestId) loading.textContent = "The article could not be loaded. Try another point.";
       }
@@ -673,19 +650,65 @@
         if (traveled > 90 && performance.now() - lastPopupAt > 350) addPopup();
       }
     });
-    let last = 0, scrollPosition = 0;
+    const gpioButtons = { up: false, down: false };
+    const keyboardButtons = { up: false, down: false };
+    async function pollButtons() {
+      try {
+        const response = await fetch("buttons", { cache: "no-store" });
+        if (!response.ok) throw new Error(`Button server: ${response.status}`);
+        const state = await response.json();
+        gpioButtons.up = state.up === true;
+        gpioButtons.down = state.down === true;
+      } catch (error) {
+        gpioButtons.up = false;
+        gpioButtons.down = false;
+      } finally {
+        window.setTimeout(pollButtons, 50);
+      }
+    }
+    for (const [eventName, pressed] of [["keydown", true], ["keyup", false]]) {
+      window.addEventListener(eventName, (event) => {
+        const direction = event.key === "ArrowUp" ? "up" : event.key === "ArrowDown" ? "down" : null;
+        if (!direction) return;
+        keyboardButtons[direction] = pressed;
+        event.preventDefault();
+      });
+    }
+    window.addEventListener("blur", () => {
+      keyboardButtons.up = keyboardButtons.down = false;
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        keyboardButtons.up = keyboardButtons.down = false;
+        gpioButtons.up = gpioButtons.down = false;
+      }
+    });
+    let lastScrollFrame = 0;
     function scroll(time) {
-      if (mode === "public" && pointId && loading.hidden && time - last > 40) {
-        scrollPosition += 0.35;
-        try {
-          frame.contentWindow.scrollTo(0, scrollPosition);
-        } catch (error) {
+      const elapsed = Math.min(0.05, (time - (lastScrollFrame || time)) / 1000);
+      lastScrollFrame = time;
+      if (mode === "public" && pointId && loading.hidden) {
+        const up = gpioButtons.up || keyboardButtons.up;
+        const down = gpioButtons.down || keyboardButtons.down;
+        const direction = Number(down) - Number(up);
+        if (direction) {
+          try { frame.contentWindow.scrollBy(0, direction * 220 * elapsed); }
+          catch (error) { /* The iframe has not finished loading. */ }
         }
-        last = time;
-      } else if (!pointId) scrollPosition = 0;
+      }
       requestAnimationFrame(scroll);
     }
     requestAnimationFrame(scroll);
+    void pollButtons();
+    preloadPromise = preloadWikipediaArticles();
+    preloadPromise.then(() => {
+      preloadOverlay.hidden = true;
+    }).catch((error) => {
+      console.error("Wikipedia preload failed:", error);
+      preloadStatus.textContent = "Wikipedia articles could not all be loaded. Please reload the page.";
+      document.getElementById("wiki-preload-retry").hidden = false;
+    });
+    document.getElementById("wiki-preload-retry").addEventListener("click", () => location.reload());
     window.dispatchEvent(new PointerEvent("pointermove", { clientX: innerWidth / 2, clientY: innerHeight / 2 }));
   })();
 
