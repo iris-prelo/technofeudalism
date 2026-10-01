@@ -5,10 +5,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Web as Territory</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=pi-buttons-3" />
   <script src="https://cdn.jsdelivr.net/npm/p5@1.11.10/lib/p5.min.js"></script>
   <script src="https://unpkg.com/comlink/dist/umd/comlink.js"></script>
-  <script src="main.js" defer></script>
+  <script src="main.js?v=pi-buttons-3" defer></script>
 </head>
 
 <body>
@@ -62,15 +62,15 @@
       </div>
     </div>
   </div>
-  <div id="camera-view">
+  <div id="camera-view" style="opacity:0!important;pointer-events:none!important">
     <video id="video" autoplay playsinline muted></video><canvas id="camera-overlay"
       aria-label="AprilTag detection debug overlay"></canvas>
   </div>
-  <label id="camera-control" for="camera-select">Camera
+  <label id="camera-control" for="camera-select" style="opacity:0!important;pointer-events:none!important">Camera
     <select id="camera-select" disabled>
       <option>Requesting camera access ...</option>
     </select></label>
-  <div id="status" role="status">Starting ...</div>
+  <div id="status" role="status" style="opacity:0!important;pointer-events:none!important">Starting ...</div>
 </body>
 
 </html>

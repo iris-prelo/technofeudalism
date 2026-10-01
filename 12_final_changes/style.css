@@ -107,6 +107,25 @@ body {
   margin-left: 0.4rem;
 }
 
+/* Kamera und Status arbeiten weiter, ihre Oberfläche bleibt unsichtbar. */
+#camera-view,
+#camera-control,
+#status {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#button-debug {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 1100;
+  padding: .6rem .8rem;
+  background: white;
+  color: black;
+  font: 14px monospace;
+}
+
 .circle {
   background-color: #858587;
   width: min(100vh, 100vw);

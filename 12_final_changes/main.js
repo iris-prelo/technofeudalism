@@ -609,6 +609,15 @@
         if (token !== requestId) return;
         const prepared = preparedByPoint.get(id);
         if (!prepared) throw new Error("Article was not prepared");
+        frame.onload = () => {
+          if (token !== requestId) return;
+          try {
+            frame.contentWindow.addEventListener("keydown", onKeyDown);
+            frame.contentWindow.addEventListener("keyup", onKeyUp);
+            frame.contentDocument.addEventListener("keydown", onKeyDown, true);
+            frame.contentDocument.addEventListener("keyup", onKeyUp, true);
+          } catch (error) { /* Keyboard events on the parent page still work. */ }
+        };
         frame.srcdoc = prepared.srcdoc;
         link.href = prepared.url;
         // Text sofort anzeigen; Bilder im iFrame dürfen danach weiterladen.
@@ -652,35 +661,89 @@
     });
     const gpioButtons = { up: false, down: false };
     const keyboardButtons = { up: false, down: false };
+    const buttonDebug = new URLSearchParams(location.search).has("debugButtons")
+      ? document.body.appendChild(document.createElement("div")) : null;
+    if (buttonDebug) buttonDebug.id = "button-debug";
+    let buttonConnection = "Connecting to /buttons";
+    function updateButtonDebug() {
+      if (buttonDebug) buttonDebug.textContent = `${buttonConnection} | GPIO17 ↑ ${gpioButtons.up} | GPIO5 ↓ ${gpioButtons.down} | Keyboard ↑ ${keyboardButtons.up} ↓ ${keyboardButtons.down}`;
+    }
+    window.buttonDiagnostics = () => {
+      let articleScrollTop = null;
+      try { articleScrollTop = frame.contentDocument?.scrollingElement?.scrollTop ?? null; }
+      catch (error) { /* The frame may still be loading. */ }
+      return {
+        connection: buttonConnection,
+        gpio17Up: gpioButtons.up,
+        gpio5Down: gpioButtons.down,
+        keyboardUp: keyboardButtons.up,
+        keyboardDown: keyboardButtons.down,
+        articleVisible: mode === "public" && !!pointId && loading.hidden,
+        articleScrollTop,
+        endpoint: new URL("buttons", location.href).href
+      };
+    };
     async function pollButtons() {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 1500);
       try {
-        const response = await fetch("buttons", { cache: "no-store" });
+        const response = await fetch("buttons", { cache: "no-store", signal: controller.signal });
         if (!response.ok) throw new Error(`Button server: ${response.status}`);
+        if (!response.headers.get("content-type")?.includes("application/json")) {
+          throw new Error("Use button_server.py to serve the page, not Live Server");
+        }
         const state = await response.json();
         gpioButtons.up = state.up === true;
         gpioButtons.down = state.down === true;
+        buttonConnection = "GPIO connected";
       } catch (error) {
         gpioButtons.up = false;
         gpioButtons.down = false;
+        const message = error.message || String(error);
+        if (buttonConnection !== message) console.warn("GPIO button connection:", message);
+        buttonConnection = message;
       } finally {
-        window.setTimeout(pollButtons, 50);
+        window.clearTimeout(timeout);
+        updateButtonDebug();
+        window.setTimeout(pollButtons, buttonConnection === "GPIO connected" ? 50 : 1500);
       }
     }
-    for (const [eventName, pressed] of [["keydown", true], ["keyup", false]]) {
-      window.addEventListener(eventName, (event) => {
-        const direction = event.key === "ArrowUp" ? "up" : event.key === "ArrowDown" ? "down" : null;
-        if (!direction) return;
-        keyboardButtons[direction] = pressed;
-        event.preventDefault();
-      });
+    function scrollArticleBy(amount) {
+      if (mode !== "public" || !pointId || !loading.hidden) return;
+      try {
+        const scrollElement = frame.contentDocument?.scrollingElement;
+        if (scrollElement) {
+          const previous = scrollElement.scrollTop;
+          scrollElement.scrollTop += amount;
+          if (scrollElement.scrollTop !== previous) return;
+        }
+      } catch (error) { /* Try scrolling the frame window instead. */ }
+      try { frame.contentWindow.scrollBy(0, amount); }
+      catch (error) { /* The frame may still be loading. */ }
     }
+    function setKeyboardButton(event, pressed) {
+      const direction = event.key === "ArrowUp" ? "up" : event.key === "ArrowDown" ? "down" : null;
+      if (!direction) return;
+      const wasPressed = keyboardButtons[direction];
+      keyboardButtons[direction] = pressed;
+      updateButtonDebug();
+      event.preventDefault();
+      if (pressed && !wasPressed) scrollArticleBy(direction === "up" ? -32 : 32);
+    }
+    function onKeyDown(event) { setKeyboardButton(event, true); }
+    function onKeyUp(event) { setKeyboardButton(event, false); }
+    window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("keyup", onKeyUp, true);
     window.addEventListener("blur", () => {
+      if (document.activeElement === frame) return;
       keyboardButtons.up = keyboardButtons.down = false;
+      updateButtonDebug();
     });
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) {
         keyboardButtons.up = keyboardButtons.down = false;
         gpioButtons.up = gpioButtons.down = false;
+        updateButtonDebug();
       }
     });
     let lastScrollFrame = 0;
@@ -691,14 +754,12 @@
         const up = gpioButtons.up || keyboardButtons.up;
         const down = gpioButtons.down || keyboardButtons.down;
         const direction = Number(down) - Number(up);
-        if (direction) {
-          try { frame.contentWindow.scrollBy(0, direction * 220 * elapsed); }
-          catch (error) { /* The iframe has not finished loading. */ }
-        }
+        if (direction) scrollArticleBy(direction * 220 * elapsed);
       }
       requestAnimationFrame(scroll);
     }
     requestAnimationFrame(scroll);
+    updateButtonDebug();
     void pollButtons();
     preloadPromise = preloadWikipediaArticles();
     preloadPromise.then(() => {
