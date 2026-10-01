@@ -14,7 +14,19 @@ PROJECT = Path(__file__).resolve().parent
 def make_handler(up_button, down_button):
     class ButtonHandler(SimpleHTTPRequestHandler):
         def do_GET(self):
-            if urlsplit(self.path).path != '/buttons':
+            path = urlsplit(self.path).path
+            if path in ('/', '/index.html'):
+                html = (PROJECT / 'index.html').read_bytes()
+                html = html.replace(b'<meta name="gpio-bridge" content="off" />',
+                                    b'<meta name="gpio-bridge" content="on" />')
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.send_header('Cache-Control', 'no-store')
+                self.send_header('Content-Length', str(len(html)))
+                self.end_headers()
+                self.wfile.write(html)
+                return
+            if path != '/buttons':
                 return super().do_GET()
 
             body = json.dumps({

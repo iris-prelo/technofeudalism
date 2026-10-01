@@ -661,10 +661,11 @@
     });
     const gpioButtons = { up: false, down: false };
     const keyboardButtons = { up: false, down: false };
+    let buttonPollingEnabled = document.querySelector('meta[name="gpio-bridge"]')?.content === "on";
     const buttonDebug = new URLSearchParams(location.search).has("debugButtons")
       ? document.body.appendChild(document.createElement("div")) : null;
     if (buttonDebug) buttonDebug.id = "button-debug";
-    let buttonConnection = "Connecting to /buttons";
+    let buttonConnection = buttonPollingEnabled ? "Connecting to /buttons" : "Keyboard only (start button_server.py on Pi for GPIO)";
     function updateButtonDebug() {
       if (buttonDebug) buttonDebug.textContent = `${buttonConnection} | GPIO17 ↑ ${gpioButtons.up} | GPIO5 ↓ ${gpioButtons.down} | Keyboard ↑ ${keyboardButtons.up} ↓ ${keyboardButtons.down}`;
     }
@@ -688,7 +689,10 @@
       const timeout = window.setTimeout(() => controller.abort(), 1500);
       try {
         const response = await fetch("buttons", { cache: "no-store", signal: controller.signal });
-        if (!response.ok) throw new Error(`Button server: ${response.status}`);
+        if (!response.ok) {
+          if (response.status === 404) buttonPollingEnabled = false;
+          throw new Error(`Button server: ${response.status}`);
+        }
         if (!response.headers.get("content-type")?.includes("application/json")) {
           throw new Error("Use button_server.py to serve the page, not Live Server");
         }
@@ -705,7 +709,7 @@
       } finally {
         window.clearTimeout(timeout);
         updateButtonDebug();
-        window.setTimeout(pollButtons, buttonConnection === "GPIO connected" ? 50 : 1500);
+        if (buttonPollingEnabled) window.setTimeout(pollButtons, buttonConnection === "GPIO connected" ? 50 : 1500);
       }
     }
     function scrollArticleBy(amount) {
@@ -760,7 +764,7 @@
     }
     requestAnimationFrame(scroll);
     updateButtonDebug();
-    void pollButtons();
+    if (buttonPollingEnabled) void pollButtons();
     preloadPromise = preloadWikipediaArticles();
     preloadPromise.then(() => {
       preloadOverlay.hidden = true;
