@@ -57,8 +57,8 @@ def main():
     down_button = Button(5, pull_up=True, bounce_time=0.02, pin_factory=pin_factory)
     up_button.when_pressed = lambda: print('GPIO17 / UP pressed', flush=True)
     up_button.when_released = lambda: print('GPIO17 / UP released', flush=True)
-    down_button.when_pressed = lambda: print('GPIO5 / DOWN pressed', flush=True)
-    down_button.when_released = lambda: print('GPIO5 / DOWN released', flush=True)
+    down_button.when_pressed = lambda: print('GPIO3 / DOWN pressed', flush=True)
+    down_button.when_released = lambda: print('GPIO3 / DOWN released', flush=True)
     try:
         with ThreadingHTTPServer((args.host, args.port), make_handler(up_button, down_button)) as server:
             print(f'Open http://{args.host}:{args.port}/index.html')
